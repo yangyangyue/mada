@@ -1,6 +1,9 @@
 import lightning as L
 import torch
-from torch import nn
+from torch import nn, optim
+from torch.nn import functional as F
+from torchmetrics.regression import MeanAbsoluteError
+
 
 
 class DownSampleNetwork(nn.Module):
@@ -189,6 +192,8 @@ class AadaNet(L.LightningModule):
         self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
         self.decoder = Decoder(inplates, midplates, n_heads, dropout, n_layers)
 
+        self.mae_metric = MeanAbsoluteError()
+
     def forward(self, example, sample):
         example = self.up_dim1(example)
         sample = self.up_dim2(sample)
@@ -198,3 +203,20 @@ class AadaNet(L.LightningModule):
         samples = self.sample_encoder(sample, examples)
         appliance = self.decoder(samples[-1], samples)
         return self.down_dim(appliance)
+    
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(self.parameters(), lr=1e-3)
+        return optimizer
+    
+    def training_step(self, batch):
+        examples, samples, gt_apps = batch
+        pred_apps = self(examples, samples)
+        mse = F.mse_loss(pred_apps, gt_apps)
+        self.log('mse', mse)
+        return mse
+    
+    def validation_step(self, batch):
+        examples, samples, gt_apps = batch
+        pred_apps = self(examples, samples)
+        mae = self.mae_metric(pred_apps, gt_apps)
+        self.log('mae', mae)
