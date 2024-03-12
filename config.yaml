@@ -1,30 +1,69 @@
-train_batch_sizes: [1]
-num_workers: 8
-val_batch_sizes: [1]
-val_batches: 1
-input_size: [896, 672]
-max_length: 4096
-max_position_embeddings: 4096
-accumulate_grad_batches: 3
-window_size: 7
-patch_size: 4
-embed_dim: 128
-hidden_dimension: 1024
-num_heads: [4, 8, 16, 32]
-encoder_layer: [2, 2, 14, 2]
-decoder_layer: 10
-align_long_axis: False
-num_nodes: 1
-seed: 25
-lr: 5e-5
-min_lr: 7.5e-6
-lr_step: 16
-gamma: 0.9996
-warmup_steps: 250
-num_training_samples_per_epoch: 10000
 max_epochs: 30
-max_steps: -1
-val_check_interval: null
-check_val_every_n_epoch: 1
-gradient_clip_val: 0.5
-verbose: False
+batch_size: 64
+inplates: 64
+midplates: 32
+n_heads: 8
+dropout: 0.1
+n_layers: 6
+window_size: 4096
+window_stride: 1024
+
+app_alias:
+  {
+    "ukdale":
+      {
+        "kettle": ["kettle"],
+        "microwave": ["microwave"],
+        "dishwasher": ["dishwasher", "dish_washer"],
+        "washing_machine": ["washing_machine", "washer_dryer"],
+        "fridge": ["fridge", "fridge_freezer"],
+        "rice_cooker": ["rice_cooker"],
+      },
+    "redd":
+      {
+        "microwave": ["microwave"],
+        "dishwasher": ["dishwaser"],
+        "fridge": ["refrigerator"],
+        "washing_machine": ["washer_dryer"],
+      },
+  }
+
+train_houses:
+  {
+    "ukdale": ["house_1", "house_2", "house_5"],
+    "redd": ["house_1", "house_2", "house_3", "house_4", "house_5", "house_6"],
+  }
+train_apps:
+  {
+    "ukdale":
+      [
+        "kettle",
+        "microwave",
+        "dishwasher",
+        "washing_machine",
+        "fridge",
+        "rice_cooker",
+      ],
+    "redd":
+      ["microwave", "dishwasher", "washing_machine", "fridge", "rice_cooker"],
+  }
+
+test_houses:
+  {
+    "ukdale": ["house_1", "house_2", "house_5"],
+    "redd": ["house_1", "house_2", "house_3", "house_4", "house_5", "house_6"],
+  }
+test_apps:
+  {
+    "ukdale":
+      [
+        "kettle",
+        "microwave",
+        "dishwasher",
+        "washing_machine",
+        "fridge",
+        "rice_cooker",
+      ],
+    "redd":
+      ["microwave", "dishwasher", "washing_machine", "fridge", "rice_cooker"],
+  }
