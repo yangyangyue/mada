@@ -70,11 +70,10 @@ class PositionEmbeddingSine(nn.Module):
     def forward(self, x):
         inplates, length = x.shape[1], x.shape[2]
         pe = torch.zeros(inplates, length) 
-        position = torch.arange(0, length).unsqueeze(1).float() 
-        div_term = torch.full([1, inplates // 2], 10000).pow(
-            (torch.arange(0, inplates, 2) / self.in_channels).float()).float()
-        pe[0::2, :] = torch.sin(position / div_term)
-        pe[1::2, :] = torch.cos(position / div_term)
+        position = torch.arange(0, length)
+        div_term = torch.full([1, inplates // 2], 10000).pow((torch.arange(0, inplates, 2) / inplates))
+        pe[0::2, :] = torch.sin(position[:, None] / div_term)
+        pe[1::2, :] = torch.cos(position[:, None] / div_term)
         return self.dropout(pe.to(x.device))
     
 
@@ -112,9 +111,13 @@ class ExampleEncoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, x):
-        x = self.down_sampler(x).permute([0, 2, 1])
+        """
+        Args:
+            x (N, D, L): the features of examples to each encoder layer
+        """
+        x = self.down_sampler(x).permute(0, 2, 1)
         x = x + self.dropout(self.norm(self.attention(x, x, x)))
-        return x.permute([0, 2, 1])
+        return x.permute(0, 2, 1)
     
 
 class SampleEncoderLayer(nn.Module):
@@ -129,10 +132,16 @@ class SampleEncoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
     
     def forward(self, x, y):
-        x = self.down_sampler(x).permute([0, 2, 1])
+        """
+        Args:
+            x (N, D, L): the features of samples
+            y (N, D, L): the features of examples
+        """
+        y = y.permute(0, 2, 1)
+        x = self.down_sampler(x).permute(0, 2, 1)
         x = x + self.dropout1(self.norm1(self.attention1(x, x, x)))
         x = x + self.dropout2(self.norm2(self.attention2(x, y, y)))
-        return x.permute([0, 2, 1])
+        return x.permute(0, 2, 1)
     
 class DecoderLayer(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout) -> None:
@@ -146,10 +155,16 @@ class DecoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
     
     def forward(self, x, y):
-        x = self.up_sampler(x).permute([0, 2, 1])
+        """
+        Args:
+            x (N, D, L): the features of decoder
+            y (N, D, L): the features of samples
+        """
+        y = y.permute(0, 2, 1)
+        x = self.up_sampler(x).permute(0, 2, 1)
         x = x + self.dropout1(self.norm1(self.attention1(x, x, x)))
         x = x + self.dropout2(self.norm2(self.attention2(x, y, y)))
-        return x.permute([0, 2, 1])
+        return x.permute(0, 2, 1)
     
 
 class ExampleEncoder(nn.Module):
@@ -202,21 +217,29 @@ class AadaNet(L.LightningModule):
 
         self.mae_metric = MeanAbsoluteError()
 
-    def forward(self, example, sample):
-        example = self.up_dim1(example)
-        sample = self.up_dim2(sample)
-        example = example + self.pe1(example)
-        sample = sample + self.pe2(sample)
-        examples = self.example_encoder(example)
-        samples = self.sample_encoder(sample, examples)
+    def forward(self, examples, samples):
+        """
+        Args:
+            examples (N, L): input examples
+            samples (N, L): input samples
+        """
+        # examples | samples: (N, D, L)
+        examples = self.up_dim1(examples[:, None, :])
+        samples = self.up_dim2(samples[:, None, :])
+        examples = examples + self.pe1(examples)
+        samples = samples + self.pe2(samples)
+
+        examples = self.example_encoder(examples)
+        samples = self.sample_encoder(samples, examples)
         appliance = self.decoder(samples[-1], samples)
-        return self.down_dim(appliance)
+        return self.down_dim(appliance).squeeze()
     
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=1e-3)
         return optimizer
     
     def training_step(self, batch):
+        # examples | samples | gt_apps: (N, WINDOE_SIZE)
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mse = F.mse_loss(pred_apps, gt_apps)

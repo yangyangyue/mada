@@ -1,3 +1,4 @@
+data_dir: "./data"
 max_epochs: 30
 batch_size: 64
 inplates: 64
@@ -28,11 +29,7 @@ app_alias:
       },
   }
 
-train_houses:
-  {
-    "ukdale": ["house_1", "house_2", "house_5"],
-    "redd": ["house_1", "house_2", "house_3", "house_4", "house_5", "house_6"],
-  }
+train_houses: { "ukdale": ["house_1", "house_5"] }
 train_apps:
   {
     "ukdale":
@@ -44,15 +41,9 @@ train_apps:
         "fridge",
         "rice_cooker",
       ],
-    "redd":
-      ["microwave", "dishwasher", "washing_machine", "fridge", "rice_cooker"],
   }
 
-test_houses:
-  {
-    "ukdale": ["house_1", "house_2", "house_5"],
-    "redd": ["house_1", "house_2", "house_3", "house_4", "house_5", "house_6"],
-  }
+test_houses: { "ukdale": ["house_2"] }
 test_apps:
   {
     "ukdale":
@@ -64,6 +55,4 @@ test_apps:
         "fridge",
         "rice_cooker",
       ],
-    "redd":
-      ["microwave", "dishwasher", "washing_machine", "fridge", "rice_cooker"],
   }

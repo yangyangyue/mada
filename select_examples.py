@@ -64,11 +64,11 @@ def get_example(set_name, house, app_name, app_alias, thresh=30):
 
 if __name__ == '__main__':
     # 'ukdale', 'redd', 'refit'
-    set_name = 'ukdale'
+    set_name = 'redd'
     # 'house_1', 'house_2', 'house_3' ...
-    house = 'house_5'
+    house = 'house_1'
     # 'kettle', 'microwave', 'dishwasher', 'washing_machine', 'fridge'
-    app_name = 'fridge'
+    app_name = 'dishwasher'
 
     config = Config('config.yaml')
     get_example(set_name, house, app_name, config.app_alias[set_name][app_name])
