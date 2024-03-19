@@ -55,10 +55,12 @@ class AbstractDataset(Dataset):
         self.app_name = app_name
         self.app_alias = app_alias
         self.samples, self.apps = self.load_data()
-        
-        self.samples = np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]
-        self.apps = np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]
-        self.examples = self.load_examples(len(self.samples))
+        if len(self.samples) < WINDOW_SIZE:
+            self.samples, self.apps, self.examples = [], [], []
+        else:
+            self.samples = np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]
+            self.apps = np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]
+            self.examples = self.load_examples(len(self.samples))
 
     def __len__(self):
         return len(self.samples)

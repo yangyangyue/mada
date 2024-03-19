@@ -241,7 +241,7 @@ class AadaNet(L.LightningModule):
         optimizer = optim.AdamW(self.parameters(), lr=1e-3)
         return optimizer
     
-    def training_step(self, batch):
+    def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
@@ -249,7 +249,7 @@ class AadaNet(L.LightningModule):
         self.log('mse', mse)
         return mse
     
-    def validation_step(self, batch):
+    def validation_step(self, batch, _):
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mae = self.mae_metric(pred_apps, gt_apps)
