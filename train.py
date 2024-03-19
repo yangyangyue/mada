@@ -6,9 +6,11 @@ written by lily
 email: lily231147@gmail.com
 """
 
-from sconf import Config
+import sys
+sys.path.append('/home/aistudio/external-libraries')
 
 import lightning.pytorch as pl
+from sconf import Config
 from torch.utils.data import DataLoader, random_split
 
 from dataset import NilmDataset
@@ -33,8 +35,7 @@ def train(config):
         devices="auto",
         accelerator="auto",
         max_epochs=config.max_epochs,
-        log_every_n_steps=15,
-        precision="bf16-mixed",
+        log_every_n_steps=15
     )
 
     trainer.fit(aada, train_loader, val_loader)

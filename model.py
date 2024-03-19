@@ -6,6 +6,9 @@ written by lily
 email: lily231147@gmail.com
 """
 
+import sys
+sys.path.append('/home/aistudio/external-libraries')
+
 import lightning as L
 import torch
 from torch import nn, optim

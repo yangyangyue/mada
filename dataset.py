@@ -9,12 +9,15 @@ import hashlib
 from pathlib import Path
 import tempfile
 
+import sys
+sys.path.append('/home/aistudio/external-libraries')
+
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, ConcatDataset
 
-WINDOW_SIZE: 4096
-WINDOW_STRIDE: 1024
+WINDOW_SIZE = 4096
+WINDOW_STRIDE = 1024
 
 
 def read_power(path, sampling):
@@ -51,7 +54,7 @@ class AbstractDataset(Dataset):
         self.house = house
         self.app_name = app_name
         self.app_alias = app_alias
-        self.samples, self.apps = self.load_data(house, app_name, app_alias)
+        self.samples, self.apps = self.load_data()
         
         self.samples = np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]
         self.apps = np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]
@@ -71,7 +74,7 @@ class AbstractDataset(Dataset):
         Args:
             n_examples: the examples will be duplicated to meet the num
         """
-        path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}'
+        path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}.csv'
         examples = np.loadtxt(path, dtype=np.float32)
         return examples[np.random.choice(len(examples), n_examples)]
     
@@ -81,7 +84,7 @@ class AbstractDataset(Dataset):
     
 class UkdaleDataset(AbstractDataset):
     def __init__(self, dir, house, app_name, app_alias) -> None:
-        super().__init__(dir, house, app_name, app_alias)
+        super().__init__(dir, 'ukdale', house, app_name, app_alias)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -101,7 +104,7 @@ class UkdaleDataset(AbstractDataset):
         for channel in app_channels:
             new_data = read_power(dir / f"channel_{channel}.dat", sampling)
             app_data = add_power(app_data, new_data)
-        house_data = pd.merge(house_data, app_data, on='time')
+        house_data = pd.merge(house_data, app_data, on='stamp')
         house_data.columns = ['aggregate', self.app_name]
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
@@ -111,7 +114,7 @@ class UkdaleDataset(AbstractDataset):
     
 class ReddDataset(AbstractDataset):
     def __init__(self, dir, house, app_name, app_alias) -> None:
-        super().__init__(dir, house, app_name, app_alias)
+        super().__init__(dir, 'redd', house, app_name, app_alias)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -133,7 +136,7 @@ class ReddDataset(AbstractDataset):
         for channel in app_channels:
             new_data = read_power(dir / f'channel_{channel}.dat', sampling)
             app_data = add_power(app_data, new_data)
-        house_data = pd.merge(house_data, app_data, on='time')
+        house_data = pd.merge(house_data, app_data, on='stamp')
         house_data.columns = ['aggregate', self.app_name]
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
@@ -158,13 +161,15 @@ class NilmDataset(Dataset):
         # build dataset for appliances in ukdale
         if 'ukdale' in houses:
             dir = Path(config.data_dir) / 'ukdale'
-            datasets += [UkdaleDataset(dir,  house, app_name, app_alias) 
-                            for house in houses['ukdale'] for app_name, app_alias in apps['ukdale'].items()]
+            app_alias = config.app_alias['ukdale']
+            datasets += [UkdaleDataset(dir,  house, app_name, app_alias[app_name]) 
+                            for house in houses['ukdale'] for app_name in apps['ukdale']]
         # build dataset for appliances in redd
         if 'redd' in houses:
             dir = Path(config.data_dir) / 'redd'
-            datasets += [ReddDataset(dir, house, app_name, app_alias) 
-                            for house in houses['redd'] for app_name, app_alias in apps['redd'].items()]
+            app_alias = config.app_alias['redd']
+            datasets += [ReddDataset(dir, house, app_name, app_alias[app_name]) 
+                            for house in houses['redd'] for app_name in apps['redd']]
         self.dataset = ConcatDataset(datasets)
         
     def __getitem__(self, index):
