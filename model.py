@@ -46,11 +46,11 @@ class UpSampleNetwork(nn.Module):
     def __init__(self, inplates, midplates):
         super().__init__()
         self.identity = nn.Sequential(
-            nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1),
+            nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm1d(inplates),
         )
         self.stream = nn.Sequential(
-            nn.ConvTranspose1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=2, padding=1),
+            nn.ConvTranspose1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.BatchNorm1d(midplates),
             nn.ReLU(),
             nn.Conv1d(in_channels=midplates, out_channels=midplates,kernel_size=3, stride=1, padding=1),
@@ -72,12 +72,12 @@ class PositionEmbeddingSine(nn.Module):
 
     def forward(self, x):
         inplates, length = x.shape[1], x.shape[2]
-        pe = torch.zeros(inplates, length) 
+        pe = torch.zeros(length, inplates) 
         position = torch.arange(0, length)
         div_term = torch.full([1, inplates // 2], 10000).pow((torch.arange(0, inplates, 2) / inplates))
-        pe[0::2, :] = torch.sin(position[:, None] / div_term)
-        pe[1::2, :] = torch.cos(position[:, None] / div_term)
-        return self.dropout(pe.to(x.device))
+        pe[:, 0::2] = torch.sin(position[:, None] / div_term)
+        pe[:, 1::2] = torch.cos(position[:, None] / div_term)
+        return self.dropout(pe.permute(1, 0).to(x.device))
     
 
 class Attention(nn.Module):
@@ -118,8 +118,9 @@ class ExampleEncoderLayer(nn.Module):
         Args:
             x (N, D, L): the features of examples to each encoder layer
         """
-        x = self.down_sampler(x).permute(0, 2, 1)
-        x = x + self.dropout(self.norm(self.attention(x, x, x)))
+        x = self.down_sampler(x)
+        x = self.norm(x).permute(0, 2, 1)
+        x = x + self.dropout(self.attention(x, x, x))
         return x.permute(0, 2, 1)
     
 
@@ -141,9 +142,11 @@ class SampleEncoderLayer(nn.Module):
             y (N, D, L): the features of examples
         """
         y = y.permute(0, 2, 1)
-        x = self.down_sampler(x).permute(0, 2, 1)
-        x = x + self.dropout1(self.norm1(self.attention1(x, x, x)))
-        x = x + self.dropout2(self.norm2(self.attention2(x, y, y)))
+        x = self.down_sampler(x)
+        x = self.norm1(x).permute(0, 2, 1)
+        x = x + self.dropout1(self.attention1(x, x, x))
+        x = self.norm2(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = x + self.dropout2(self.attention2(x, y, y))
         return x.permute(0, 2, 1)
     
 class DecoderLayer(nn.Module):
@@ -164,9 +167,11 @@ class DecoderLayer(nn.Module):
             y (N, D, L): the features of samples
         """
         y = y.permute(0, 2, 1)
-        x = self.up_sampler(x).permute(0, 2, 1)
-        x = x + self.dropout1(self.norm1(self.attention1(x, x, x)))
-        x = x + self.dropout2(self.norm2(self.attention2(x, y, y)))
+        x = self.up_sampler(x)
+        x = self.norm1(x).permute(0, 2, 1)
+        x = x + self.dropout1(self.attention1(x, x, x))
+        x = self.norm2(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = x + self.dropout2(self.attention2(x, y, y))
         return x.permute(0, 2, 1)
     
 
@@ -235,7 +240,7 @@ class AadaNet(L.LightningModule):
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
         appliance = self.decoder(samples[-1], samples)
-        return self.down_dim(appliance).squeeze()
+        return self.down_dim(appliance).squeeze(1)
     
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=1e-3)
@@ -252,5 +257,7 @@ class AadaNet(L.LightningModule):
     def validation_step(self, batch, _):
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
+        pred_apps[pred_apps < 15] = 0
         mae = self.mae_metric(pred_apps, gt_apps)
         self.log('mae', mae)
+        return mae

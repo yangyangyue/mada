@@ -17,11 +17,11 @@ from dataset import add_power, read_power
 np.random.seed(42)
 plt.rc("font", family="Times New Roman")
 
-WINDOW_LENGTH = 4096
-WINDOW_STRIDE = 1024
+WINDOW_LENGTH = 1024
+WINDOW_STRIDE = 256
 
 def load_data(set_name, house, app_alias, cutoff=6000, sampling='6s'):
-    dir = Path('data') / set_name / house
+    dir = Path('nilm_lf') / set_name / house
     # 2. get the channel of specified appliance
     house_apps = pd.read_csv(dir / f"labels.dat", sep=' ', header=None).values
     app_channels = house_apps[np.isin(house_apps[:, 1], app_alias), 0]
@@ -64,11 +64,11 @@ def get_example(set_name, house, app_name, app_alias, thresh=30):
 
 if __name__ == '__main__':
     # 'ukdale', 'redd', 'refit'
-    set_name = 'redd'
+    set_name = 'ukdale'
     # 'house_1', 'house_2', 'house_3' ...
-    house = 'house_1'
+    house = 'house_5'
     # 'kettle', 'microwave', 'dishwasher', 'washing_machine', 'fridge'
-    app_name = 'dishwasher'
+    app_name = 'fridge'
 
     config = Config('config.yaml')
     get_example(set_name, house, app_name, config.app_alias[set_name][app_name])

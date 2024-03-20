@@ -49,6 +49,7 @@ class AbstractDataset(Dataset):
     """ designed for one appliance in one house """
     def __init__(self, dir, set_name, house, app_name, app_alias) -> None:
         super().__init__()
+        print(f'{house}={app_name}')
         self.dir = dir
         self.set_name = set_name
         self.house = house
@@ -58,9 +59,9 @@ class AbstractDataset(Dataset):
         if len(self.samples) < WINDOW_SIZE:
             self.samples, self.apps, self.examples = [], [], []
         else:
-            self.samples = np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]
-            self.apps = np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]
-            self.examples = self.load_examples(len(self.samples))
+            self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+            self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+            self.examples = np.copy(self.load_examples(len(self.samples))).astype(np.float32)
 
     def __len__(self):
         return len(self.samples)
@@ -77,7 +78,7 @@ class AbstractDataset(Dataset):
             n_examples: the examples will be duplicated to meet the num
         """
         path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}.csv'
-        examples = np.loadtxt(path, dtype=np.float32)
+        examples = np.loadtxt(path, dtype=np.float32).T
         return examples[np.random.choice(len(examples), n_examples)]
     
     def load_data(self, cutoff=6000, sampling='6s'):
@@ -111,7 +112,7 @@ class UkdaleDataset(AbstractDataset):
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
         house_data[house_data < 5] = 0
-        house_data = house_data.clip(lower=0, upper=cutoff, axis=1).values
+        house_data = house_data.clip(lower=0, upper=cutoff, axis=1).to_numpy(dtype=np.float32)
         return house_data[:, 0], house_data[:, 1]
     
 class ReddDataset(AbstractDataset):
@@ -143,7 +144,7 @@ class ReddDataset(AbstractDataset):
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
         house_data[house_data < 5] = 0
-        house_data = house_data.clip(lower=0, upper=cutoff, axis=1).values
+        house_data = house_data.clip(lower=0, upper=cutoff, axis=1).to_numpy(dtype=np.float32)
         return house_data[:, 0], house_data[:, 1]
 
 
