@@ -78,8 +78,8 @@ class AbstractDataset(Dataset):
             n_examples: the examples will be duplicated to meet the num
         """
         path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}.csv'
-        examples = np.loadtxt(path, dtype=np.float32).T
-        return examples[np.random.choice(len(examples), n_examples)]
+        examples = np.loadtxt(path, dtype=np.float32)
+        return np.tile(examples[None, :], (3, 1))
     
     def load_data(self, cutoff=6000, sampling='6s'):
         """ return samples and apps, this method is implemented by specific dataset"""
