@@ -42,12 +42,6 @@ def load_data(set_name, house, app_alias, cutoff=6000, sampling='6s'):
 
 def get_example(set_name, house, app_name, app_alias, thresh=30):
     """ save examples """
-    def next(_):
-        examples.append(apps_in_window)
-        np.savetxt(f'examples/{set_name}_{house}_{app_name}.csv', np.array(examples).transpose(), fmt="%.2f")
-        print(f'saved example {len(examples)}')
-
-    examples = []
     apps = load_data(set_name, house, app_alias)
     for apps_in_window in sliding_window_view(apps, WINDOW_LENGTH)[::WINDOW_LENGTH]:
         if any(apps_in_window > thresh):
@@ -58,7 +52,7 @@ def get_example(set_name, house, app_name, app_alias, thresh=30):
             plt.plot(apps_in_window, label=app_name)
             plt.legend(loc="upper right")
             # if click the figure, saving it
-            fig.canvas.mpl_connect('button_press_event', next)
+            fig.canvas.mpl_connect('button_press_event', lambda _: np.savetxt(f'examples/{set_name}_{house}_{app_name}.csv', apps_in_window, fmt="%.2f"))
             plt.show()
             plt.close(fig)
 
@@ -68,7 +62,11 @@ if __name__ == '__main__':
     # 'house_1', 'house_2', 'house_3' ...
     house = 'house_5'
     # 'kettle', 'microwave', 'dishwasher', 'washing_machine', 'fridge'
-    app_name = 'fridge'
+    app_name = 'microwave'
 
     config = Config('config.yaml')
-    get_example(set_name, house, app_name, config.app_alias[set_name][app_name])
+    # apps = load_data(set_name, house, config.app_alias[set_name][app_name])
+    # plt.figure()
+    # plt.plot(apps)
+    # plt.show()
+    get_example(set_name, house, app_name, config.app_alias[set_name][app_name], thresh=200)

@@ -16,8 +16,8 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, ConcatDataset
 
-WINDOW_SIZE = 4096
-WINDOW_STRIDE = 1024
+WINDOW_SIZE = 1024
+WINDOW_STRIDE = 256
 
 
 def read_power(path, sampling):

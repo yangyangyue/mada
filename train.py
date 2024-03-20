@@ -28,8 +28,8 @@ def train(config):
 
     train_set = NilmDataset(config)
     train_set, val_set = random_split(train_set, [0.8, 0.2])
-    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=config.batch_size)
+    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=18)
+    val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)
     aada = AadaNet(config.inplates, config.midplates, config.n_heads, config.dropout, config.n_layers)
     trainer = pl.Trainer(
         devices="auto",

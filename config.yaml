@@ -1,6 +1,6 @@
 data_dir: "./nilm_lf"
 max_epochs: 30
-batch_size: 64
+batch_size: 96
 inplates: 64
 midplates: 32
 n_heads: 8

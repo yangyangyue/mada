@@ -15,6 +15,9 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchmetrics.regression import MeanAbsoluteError
 
+WINDOW_SIZE = 1024
+WINDOW_STRIDE = 256
+
 
 
 class DownSampleNetwork(nn.Module):
@@ -225,6 +228,9 @@ class AadaNet(L.LightningModule):
 
         self.mae_metric = MeanAbsoluteError()
 
+        self.y_hat = []
+        self.y = []
+
     def forward(self, examples, samples):
         """
         Args:
@@ -243,7 +249,7 @@ class AadaNet(L.LightningModule):
         return self.down_dim(appliance).squeeze(1)
     
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=1e-3)
+        optimizer = optim.AdamW(self.parameters(), lr=1e-4)
         return optimizer
     
     def training_step(self, batch, _):
@@ -251,13 +257,52 @@ class AadaNet(L.LightningModule):
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mse = F.mse_loss(pred_apps, gt_apps)
-        self.log('mse', mse)
+        self.log('mse', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mse
     
-    def validation_step(self, batch, _):
+    def validation_step(self, batch, batch_idx):
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
+        self.y.append(pred_apps)
+        self.y_hat.append(samples)
         mae = self.mae_metric(pred_apps, gt_apps)
-        self.log('mae', mae)
+        self.log('mae', mae, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mae
+    
+    def on_validation_epoch_end(self):
+        y = self.reconstruct_y()
+        y_hat = self.reconstruct_y_hat()
+        mae = self.mae_metric(y, y_hat)
+        on_status = y_hat > 60
+        mae_on = self.mae_metric(y[on_status], y_hat[on_status])
+        self.log('mae_epoch', mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log('mae_on_epoch', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        return mae
+
+    
+    def reconstruct_y(self):
+        length = WINDOW_SIZE + (self.y.shape[0] - 1) * WINDOW_STRIDE 
+        depth = WINDOW_SIZE // WINDOW_STRIDE
+
+        out = torch.full([length, depth], float('nan'))
+        for i, cur in enumerate(self.y):
+            start = i * WINDOW_STRIDE
+            d = i % depth
+            out[start: start+WINDOW_SIZE, d] = cur
+        out = torch.nanmedian(out)
+        return out
+    
+    def reconstruct_y_hat(self):
+        length = WINDOW_SIZE + (self.y_hat.shape[0] - 1) * WINDOW_STRIDE 
+
+        out = torch.full([length, ], float('nan'))
+        for i in range(self.y_hat.shape[0] - 1):
+            start = i * WINDOW_STRIDE
+            out[start: start + WINDOW_STRIDE] = self.y_hat[i]
+        out[(self.y_hat.shape[0] - 1) * WINDOW_STRIDE:] = self.y_hat[-1]
+        out = torch.nanmedian(out)
+        return out
+
+    
+    
