@@ -228,8 +228,8 @@ class AadaNet(L.LightningModule):
 
         self.mae_metric = MeanAbsoluteError()
 
-        self.y_hat = torch.empty((0, WINDOW_SIZE))
-        self.y = torch.empty((0, WINDOW_SIZE))
+        self.y_hat = []
+        self.y = []
 
     def forward(self, examples, samples):
         """
@@ -260,12 +260,12 @@ class AadaNet(L.LightningModule):
         self.log('mse', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mse
     
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, _):
         examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
-        self.y = torch.concat(self.y, pred_apps)
-        self.y_hat = torch.concat(self.y_hat, gt_apps)
+        self.y.append([tensor for tensor in pred_apps])
+        self.y_hat.append([tensor for tensor in gt_apps])
         mae = self.mae_metric(pred_apps, gt_apps)
         self.log('mae', mae, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mae
@@ -278,13 +278,13 @@ class AadaNet(L.LightningModule):
         mae_on = self.mae_metric(y[on_status], y_hat[on_status])
         self.log('mae_epoch', mae, on_epoch=True, prog_bar=True, logger=True)
         self.log('mae_on_epoch', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.y_hat = torch.empty((0, WINDOW_SIZE))
-        self.y = torch.empty((0, WINDOW_SIZE))
+        self.y_hat.clear()
+        self.y.clear()
         return mae
 
     
     def reconstruct_y(self):
-        n = self.y.shape[0]
+        n = len(self.y)
         length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
         depth = WINDOW_SIZE // WINDOW_STRIDE
 
@@ -297,7 +297,7 @@ class AadaNet(L.LightningModule):
         return out
     
     def reconstruct_y_hat(self):
-        n = self.y_hat.shape[0]
+        n = len(self.y_hat)
         length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
 
         out = torch.full([length, ], float('nan'))

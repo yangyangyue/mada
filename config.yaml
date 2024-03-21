@@ -1,4 +1,4 @@
-data_dir: "./nilm_lf"
+data_dir: "../data"
 max_epochs: 30
 batch_size: 96
 inplates: 64
