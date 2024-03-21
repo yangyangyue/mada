@@ -228,8 +228,9 @@ class AadaNet(L.LightningModule):
 
         self.mae_metric = MeanAbsoluteError()
 
-        self.y_hat = []
-        self.y = []
+        self.val_y = []
+        self.val_y_hat = []
+        self.val_thresh = []
 
     def forward(self, examples, samples):
         """
@@ -254,32 +255,33 @@ class AadaNet(L.LightningModule):
     
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
-        examples, samples, gt_apps = batch
+        _, examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mse = F.mse_loss(pred_apps, gt_apps)
         self.log('mse', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mse
     
     def validation_step(self, batch, _):
-        examples, samples, gt_apps = batch
+        # tags: (N, 3)
+        # examples | samples | gt_apps: (N, WINDOE_SIZE)
+        threshs, examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
-        self.y.append([tensor for tensor in pred_apps])
-        self.y_hat.append([tensor for tensor in gt_apps])
+        self.val_y.extend([tensor for tensor in pred_apps])
+        self.val_y_hat.extend([tensor for tensor in gt_apps])
+        self.val_thresh.extend([thresh for thresh in threshs])
         mae = self.mae_metric(pred_apps, gt_apps)
         self.log('mae', mae, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mae
     
     def on_validation_epoch_end(self):
-        y = self.reconstruct_y()
-        y_hat = self.reconstruct_y_hat()
-        mae = self.mae_metric(y, y_hat)
-        on_status = y_hat > 60
-        mae_on = self.mae_metric(y[on_status], y_hat[on_status])
-        self.log('mae_epoch', mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log('mae_on_epoch', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.y_hat.clear()
-        self.y.clear()
+        mae = self.mae_metric(self.val_y, self.val_y_hat)
+        mae_on = torch.mean(torch.abs(torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.val_y, self.val_y_hat, self.val_thresh)])))
+        self.log('mae_my_epoch', mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log('mae_on_my_epoch', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        self.val_y.clear()
+        self.val_y_hat.clear()
+        self.val_thresh.clear()
         return mae
 
     
@@ -293,7 +295,7 @@ class AadaNet(L.LightningModule):
             start = i * WINDOW_STRIDE
             d = i % depth
             out[start: start+WINDOW_SIZE, d] = cur
-        out = torch.nanmedian(out)
+        out = torch.nanmedian(out, dim=-1).values
         return out
     
     def reconstruct_y_hat(self):
@@ -303,9 +305,8 @@ class AadaNet(L.LightningModule):
         out = torch.full([length, ], float('nan'))
         for i in range(n - 1):
             start = i * WINDOW_STRIDE
-            out[start: start + WINDOW_STRIDE] = self.y_hat[i]
+            out[start: start + WINDOW_STRIDE] = self.y_hat[i][: WINDOW_STRIDE]
         out[(n - 1) * WINDOW_STRIDE:] = self.y_hat[-1]
-        out = torch.nanmedian(out)
         return out
 
     

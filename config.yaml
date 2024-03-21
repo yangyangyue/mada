@@ -6,8 +6,6 @@ midplates: 32
 n_heads: 8
 dropout: 0.1
 n_layers: 6
-window_size: 4096
-window_stride: 1024
 
 app_alias:
   {
@@ -18,7 +16,6 @@ app_alias:
         "dishwasher": ["dishwasher", "dish_washer"],
         "washing_machine": ["washing_machine", "washer_dryer"],
         "fridge": ["fridge", "fridge_freezer"],
-        "rice_cooker": ["rice_cooker"],
       },
     "redd":
       {
@@ -29,30 +26,25 @@ app_alias:
       },
   }
 
+app_threshs:
+  {
+    "kettle": 2000,
+    "microwave": 200,
+    "dishwasher": 10,
+    "washing_machine": 20,
+    "fridge": 50,
+  }
+
 train_houses: { "ukdale": ["house_1", "house_5"] }
 train_apps:
   {
     "ukdale":
-      [
-        "kettle",
-        "microwave",
-        "dishwasher",
-        "washing_machine",
-        "fridge",
-        "rice_cooker",
-      ],
+      ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"],
   }
 
 test_houses: { "ukdale": ["house_2"] }
 test_apps:
   {
     "ukdale":
-      [
-        "kettle",
-        "microwave",
-        "dishwasher",
-        "washing_machine",
-        "fridge",
-        "rice_cooker",
-      ],
+      ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"],
   }

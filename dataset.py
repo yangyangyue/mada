@@ -47,7 +47,7 @@ def add_power(power1, power2):
 
 class AbstractDataset(Dataset):
     """ designed for one appliance in one house """
-    def __init__(self, dir, set_name, house, app_name, app_alias) -> None:
+    def __init__(self, dir, set_name, house, app_name, app_alias, app_thresh) -> None:
         super().__init__()
         print(f'{house}={app_name}')
         self.dir = dir
@@ -55,22 +55,23 @@ class AbstractDataset(Dataset):
         self.house = house
         self.app_name = app_name
         self.app_alias = app_alias
+        self.app_thresh = app_thresh
         self.samples, self.apps = self.load_data()
         if len(self.samples) < WINDOW_SIZE:
-            self.samples, self.apps, self.examples = [], [], []
+            self.samples, self.apps, self.example = [], [], None
         else:
             self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.examples = np.copy(self.load_examples(len(self.samples))).astype(np.float32)
+            self.example = self.load_example()
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         """ the shape of each part is  (window_size, ) """
-        return self.examples[idx], self.samples[idx], self.apps[idx]
+        return self.app_thresh, self.example, self.samples[idx], self.apps[idx]
     
-    def load_examples(self, n_examples):
+    def load_example(self):
         """
         return examples in random order
 
@@ -78,16 +79,16 @@ class AbstractDataset(Dataset):
             n_examples: the examples will be duplicated to meet the num
         """
         path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}.csv'
-        examples = np.loadtxt(path, dtype=np.float32)
-        return np.tile(examples[None, :], (n_examples, 1))
+        example = np.loadtxt(path, dtype=np.float32)
+        return example
     
     def load_data(self, cutoff=6000, sampling='6s'):
         """ return samples and apps, this method is implemented by specific dataset"""
         raise NotImplementedError('this method must be implemented by sub-class!')
     
 class UkdaleDataset(AbstractDataset):
-    def __init__(self, dir, house, app_name, app_alias) -> None:
-        super().__init__(dir, 'ukdale', house, app_name, app_alias)
+    def __init__(self, dir, house, app_name, app_alias, app_thresh) -> None:
+        super().__init__(dir, 'ukdale', house, app_name, app_alias, app_thresh)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -116,8 +117,8 @@ class UkdaleDataset(AbstractDataset):
         return house_data[:, 0], house_data[:, 1]
     
 class ReddDataset(AbstractDataset):
-    def __init__(self, dir, house, app_name, app_alias) -> None:
-        super().__init__(dir, 'redd', house, app_name, app_alias)
+    def __init__(self, dir, house, app_name, app_alias, app_thresh) -> None:
+        super().__init__(dir, 'redd', house, app_name, app_alias, app_thresh)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -165,13 +166,15 @@ class NilmDataset(Dataset):
         if 'ukdale' in houses:
             dir = Path(config.data_dir) / 'ukdale'
             app_alias = config.app_alias['ukdale']
-            datasets += [UkdaleDataset(dir,  house, app_name, app_alias[app_name]) 
+            app_threshs = config.app_threshs
+            datasets += [UkdaleDataset(dir,  house, app_name, app_alias[app_name], app_threshs[app_name]) 
                             for house in houses['ukdale'] for app_name in apps['ukdale']]
         # build dataset for appliances in redd
         if 'redd' in houses:
             dir = Path(config.data_dir) / 'redd'
             app_alias = config.app_alias['redd']
-            datasets += [ReddDataset(dir, house, app_name, app_alias[app_name]) 
+            app_threshs = config.app_threshs
+            datasets += [ReddDataset(dir, house, app_name, app_alias[app_name], app_threshs[app_name]) 
                             for house in houses['redd'] for app_name in apps['redd']]
         self.dataset = ConcatDataset(datasets)
         

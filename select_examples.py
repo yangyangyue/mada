@@ -62,11 +62,11 @@ if __name__ == '__main__':
     # 'house_1', 'house_2', 'house_3' ...
     house = 'house_5'
     # 'kettle', 'microwave', 'dishwasher', 'washing_machine', 'fridge'
-    app_name = 'microwave'
+    app_name = 'dishwasher'
 
     config = Config('config.yaml')
-    # apps = load_data(set_name, house, config.app_alias[set_name][app_name])
-    # plt.figure()
-    # plt.plot(apps)
-    # plt.show()
+    apps = load_data(set_name, house, config.app_alias[set_name][app_name])
+    plt.figure()
+    plt.plot(apps)
+    plt.show()
     get_example(set_name, house, app_name, config.app_alias[set_name][app_name], thresh=200)
