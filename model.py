@@ -256,6 +256,7 @@ class AadaNet(L.LightningModule):
         _, examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mse = F.mse_loss(pred_apps, gt_apps)
+        self.log('train_loss', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mse
     
     def validation_step(self, batch, _):
@@ -285,8 +286,9 @@ class AadaNet(L.LightningModule):
         self.thresh.extend([thresh for thresh in threshs])
 
     def on_test_epoch_end(self):
-        y = reconstruct(self.y)
-        y_hat = reconstruct(self.y_hat)
+        device = self.thresh[0].device
+        y = reconstruct(self.y).to(device)
+        y_hat = reconstruct(self.y_hat).to(device)
         mae = (y-y_hat).abs().mean()
         on_status = y_hat > self.thresh[0]
         mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 

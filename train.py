@@ -10,7 +10,7 @@ import sys
 sys.path.append('/home/aistudio/external-libraries')
 
 import lightning.pytorch as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint
 from sconf import Config
 from torch.utils.data import DataLoader, random_split
 
@@ -34,9 +34,8 @@ def train(config):
     aada = AadaNet(config.inplates, config.midplates, config.n_heads, config.dropout, config.n_layers)
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',
-        filename='aada.ckpt',
-        monitor='val_mae',
-        mode='min',
+        filename='aada',
+        save_last=True
     )
     trainer = pl.Trainer(
         devices="auto",

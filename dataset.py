@@ -49,7 +49,7 @@ class AbstractDataset(Dataset):
     """ designed for one appliance in one house """
     def __init__(self, dir, set_name, house, app_name, app_alias, app_thresh) -> None:
         super().__init__()
-        print(f'{house}={app_name}')
+        print(f'{house}-{app_name}')
         self.dir = dir
         self.set_name = set_name
         self.house = house
