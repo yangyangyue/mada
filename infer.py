@@ -32,10 +32,13 @@ def test(set_name, house, app_name, data_dir, app_alias, app_threshs, batch_size
 
     test_set = NilmDataset({set_name: [house]}, [app_name], data_dir, app_alias, app_threshs)
     aada = AadaNet.load_from_checkpoint('checkpoints/aada.ckpt', inplates=config.inplates, midplates=config.midplates, n_heads=config.n_heads, dropout=config.dropout, n_layers=config.n_layers)
+    aada = aada.to(device)
+    torch.set_grad_enabled(False)
+    aada.eval()
     for i, (_, example, sample, app) in enumerate(test_set):
         if np.max(app)< 60:
             continue
-        example, sample = torch.tensor(example).to(device), torch.tensor(sample)
+        example, sample = torch.tensor(example).to(device), torch.tensor(sample).to(device)
         pred_apps = aada(example[None, :], sample[None, :])[0]
         pred_apps[pred_apps < 15] = 0
         plt.figure()

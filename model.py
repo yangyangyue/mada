@@ -245,7 +245,8 @@ class AadaNet(L.LightningModule):
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
         appliance = self.decoder(samples[-1], samples)
-        return self.down_dim(appliance).squeeze(1)
+        pred_apps = self.down_dim(appliance)
+        return torch.relu(pred_apps).squeeze(1)
     
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=1e-4)
