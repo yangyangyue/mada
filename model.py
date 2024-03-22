@@ -226,11 +226,9 @@ class AadaNet(L.LightningModule):
         self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
         self.decoder = Decoder(inplates, midplates, n_heads, dropout, n_layers)
 
-        self.mae_metric = MeanAbsoluteError()
-
-        self.val_y = []
-        self.val_y_hat = []
-        self.val_thresh = []
+        self.y = []
+        self.y_hat = []
+        self.thresh = []
 
     def forward(self, examples, samples):
         """
@@ -258,7 +256,6 @@ class AadaNet(L.LightningModule):
         _, examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         mse = F.mse_loss(pred_apps, gt_apps)
-        self.log('mse', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return mse
     
     def validation_step(self, batch, _):
@@ -267,47 +264,51 @@ class AadaNet(L.LightningModule):
         threshs, examples, samples, gt_apps = batch
         pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
-        self.val_y.extend([tensor for tensor in pred_apps])
-        self.val_y_hat.extend([tensor for tensor in gt_apps])
-        self.val_thresh.extend([thresh for thresh in threshs])
-        mae = self.mae_metric(pred_apps, gt_apps)
-        self.log('mae', mae, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return mae
+        self.y.extend([tensor for tensor in pred_apps])
+        self.y_hat.extend([tensor for tensor in gt_apps])
+        self.thresh.extend([thresh for thresh in threshs])
     
     def on_validation_epoch_end(self):
-        mae = self.mae_metric(self.val_y, self.val_y_hat)
-        mae_on = torch.mean(torch.abs(torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.val_y, self.val_y_hat, self.val_thresh)])))
-        self.log('mae_my_epoch', mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log('mae_on_my_epoch', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.val_y.clear()
-        self.val_y_hat.clear()
-        self.val_thresh.clear()
-        return mae
+        mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
+        mae_on = torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).abs().mean() 
+        self.log('val_mae', mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        self.y.clear()
+        self.y_hat.clear()
+        self.thresh.clear()
+    
+    def test_step(self, batch, _):
+        threshs, examples, samples, gt_apps = batch
+        pred_apps = self(examples, samples)
+        self.y.extend([tensor for tensor in pred_apps])
+        self.y_hat.extend([tensor for tensor in gt_apps])
+        self.thresh.extend([thresh for thresh in threshs])
+
+    def on_test_epoch_end(self):
+        y = reconstruct(self.y)
+        y_hat = reconstruct(self.y_hat)
+        mae = (y-y_hat).abs().mean()
+        on_status = y_hat > self.thresh[0]
+        mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 
+        self.log('test_mae', mae, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        self.y.clear()
+        self.y_hat.clear()
+        self.thresh.clear()
 
     
-    def reconstruct_y(self):
-        n = len(self.y)
-        length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
-        depth = WINDOW_SIZE // WINDOW_STRIDE
 
-        out = torch.full([length, depth], float('nan'))
-        for i, cur in enumerate(self.y):
-            start = i * WINDOW_STRIDE
-            d = i % depth
-            out[start: start+WINDOW_SIZE, d] = cur
-        out = torch.nanmedian(out, dim=-1).values
-        return out
-    
-    def reconstruct_y_hat(self):
-        n = len(self.y_hat)
-        length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
-
-        out = torch.full([length, ], float('nan'))
-        for i in range(n - 1):
-            start = i * WINDOW_STRIDE
-            out[start: start + WINDOW_STRIDE] = self.y_hat[i][: WINDOW_STRIDE]
-        out[(n - 1) * WINDOW_STRIDE:] = self.y_hat[-1]
-        return out
+def reconstruct(y):
+    n = len(y)
+    length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
+    depth = WINDOW_SIZE // WINDOW_STRIDE
+    out = torch.full([length, depth], float('nan'))
+    for i, cur in enumerate(y):
+        start = i * WINDOW_STRIDE
+        d = i % depth
+        out[start: start+WINDOW_SIZE, d] = cur
+    out = torch.nanmedian(out, dim=-1).values
+    return out
 
     
     

@@ -56,17 +56,25 @@ def get_example(set_name, house, app_name, app_alias, thresh=30):
             plt.show()
             plt.close(fig)
 
+def save_curves():
+    config = Config('config.yaml')
+    for house in ('house_1', 'house_2', 'house_5'):
+        for app_name in ("kettle", "microwave", "dishwasher", "washing_machine", "fridge"):
+                apps = load_data('ukdale', house, config.app_alias['ukdale'][app_name])
+                plt.figure(figsize=(16, 8), dpi=800)
+                plt.plot(apps, label=app_name)
+                plt.legend(loc="upper right")
+                plt.savefig(f'curves/ukdale_{house}_{app_name}.png')
+                plt.close()
+
+
 if __name__ == '__main__':
     # 'ukdale', 'redd', 'refit'
     set_name = 'ukdale'
     # 'house_1', 'house_2', 'house_3' ...
-    house = 'house_5'
+    house = 'house_2'
     # 'kettle', 'microwave', 'dishwasher', 'washing_machine', 'fridge'
-    app_name = 'dishwasher'
+    app_name = 'fridge'
 
     config = Config('config.yaml')
-    apps = load_data(set_name, house, config.app_alias[set_name][app_name])
-    plt.figure()
-    plt.plot(apps)
-    plt.show()
     get_example(set_name, house, app_name, config.app_alias[set_name][app_name], thresh=200)

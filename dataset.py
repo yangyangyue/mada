@@ -153,29 +153,20 @@ class NilmDataset(Dataset):
     """
     build unified dataset for all appliances
     """
-    def __init__(self, config, train=True):
-        if train:
-            houses = config.train_houses
-            apps = config.train_apps
-        else:
-            houses =  config.test_houses
-            apps = config.test_apps
-
+    def __init__(self, houses, apps,  data_dir, app_alias, app_threshs):
         datasets = []
         # build dataset for appliances in ukdale
         if 'ukdale' in houses:
-            dir = Path(config.data_dir) / 'ukdale'
-            app_alias = config.app_alias['ukdale']
-            app_threshs = config.app_threshs
+            dir = Path(data_dir) / 'ukdale'
+            app_alias = app_alias['ukdale']
             datasets += [UkdaleDataset(dir,  house, app_name, app_alias[app_name], app_threshs[app_name]) 
-                            for house in houses['ukdale'] for app_name in apps['ukdale']]
+                            for house in houses['ukdale'] for app_name in apps]
         # build dataset for appliances in redd
         if 'redd' in houses:
-            dir = Path(config.data_dir) / 'redd'
-            app_alias = config.app_alias['redd']
-            app_threshs = config.app_threshs
+            dir = Path(data_dir) / 'redd'
+            app_alias = app_alias['redd']
             datasets += [ReddDataset(dir, house, app_name, app_alias[app_name], app_threshs[app_name]) 
-                            for house in houses['redd'] for app_name in apps['redd']]
+                            for house in houses['redd'] for app_name in apps]
         self.dataset = ConcatDataset(datasets)
         
     def __getitem__(self, index):

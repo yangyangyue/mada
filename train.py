@@ -10,6 +10,7 @@ import sys
 sys.path.append('/home/aistudio/external-libraries')
 
 import lightning.pytorch as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
 from sconf import Config
 from torch.utils.data import DataLoader, random_split
 
@@ -26,16 +27,23 @@ def train(config):
     """
     pl.seed_everything(42, workers=True)
 
-    train_set = NilmDataset(config)
+    train_set = NilmDataset(config.train_houses, config.train_apps, config.data_dir, config.app_alias, config.app_threshs)
     train_set, val_set = random_split(train_set, [0.8, 0.2])
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=18)
     val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)
     aada = AadaNet(config.inplates, config.midplates, config.n_heads, config.dropout, config.n_layers)
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints/',
+        filename='aada.ckpt',
+        monitor='val_mae',
+        mode='min',
+    )
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
         max_epochs=config.max_epochs,
-        log_every_n_steps=15
+        log_every_n_steps=15,
+        callbacks=[checkpoint_callback]
     )
 
     trainer.fit(aada, train_loader, val_loader)
