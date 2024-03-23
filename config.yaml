@@ -1,4 +1,4 @@
-data_dir: "./nilm_lf"
+data_dir: "../data"
 max_epochs: 30
 batch_size: 96
 inplates: 64
@@ -7,36 +7,29 @@ n_heads: 8
 dropout: 0.1
 n_layers: 6
 
-app_alias:
+alias:
   {
-    "ukdale":
-      {
-        "kettle": ["kettle"],
-        "microwave": ["microwave"],
-        "dishwasher": ["dishwasher", "dish_washer"],
-        "washing_machine": ["washing_machine", "washer_dryer"],
-        "fridge": ["fridge", "fridge_freezer"],
-      },
-    "redd":
-      {
-        "microwave": ["microwave"],
-        "dishwasher": ["dishwaser"],
-        "fridge": ["refrigerator"],
-        "washing_machine": ["washer_dryer"],
-      },
+    "kettle": ["kettle"],
+    "microwave": ["microwave"],
+    "dishwasher": ["dishwasher", "dish_washer", “dishwaser],
+    "washing_machine": ["washing_machine", "washer_dryer"],
+    "fridge": ["fridge", "fridge_freezer", "refrigerator"],
   }
 
-app_threshs:
+threshs:
   {
     "kettle": 2000,
+    "fridge": 50,
+    "washing_machine": 20,
     "microwave": 200,
     "dishwasher": 10,
-    "washing_machine": 20,
-    "fridge": 50,
   }
 
-train_houses: { "ukdale": ["house_1", "house_5"] }
-train_apps: ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
-
-test_houses: { "ukdale": ["house_2"] }
-test_apps: ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
+ceils:
+  {
+    "kettle": 3100,
+    "fridge": 300,
+    "washing_machine": 2500,
+    "microwave": 3000,
+    "dishwasher": 2500,
+  }

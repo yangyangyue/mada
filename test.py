@@ -6,7 +6,10 @@ written by lily
 email: lily231147@gmail.com
 """
 
+import argparse
 import sys
+
+from lightning_module import NilmNet
 sys.path.append('/home/aistudio/external-libraries')
 
 import lightning.pytorch as pl
@@ -14,10 +17,17 @@ from sconf import Config
 from torch.utils.data import DataLoader
 
 from dataset import NilmDataset
-from model import AadaNet
+from models.aada import AadaNet
+
+houses = { "ukdale": ["house_2"] }
+app_names = ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--method', type=str, default='aada')
+args = parser.parse_args()
 
 
-def test(set_name, house, app_name, data_dir, app_alias, app_threshs, batch_size):
+def test(method, set_name, house, app_name, data_dir, app_alias, app_threshs, batch_size):
     """
     Train a Nougat model using the provided configuration.
 
@@ -29,17 +39,19 @@ def test(set_name, house, app_name, data_dir, app_alias, app_threshs, batch_size
 
     test_set = NilmDataset({set_name: [house]}, [app_name], data_dir, app_alias, app_threshs)
     test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=18)
-    aada = AadaNet.load_from_checkpoint('checkpoints/aada.ckpt', inplates=config.inplates, midplates=config.midplates, n_heads=config.n_heads, dropout=config.dropout, n_layers=config.n_layers)
+
+    model = NilmNet.load_from_checkpoint(f'checkpoints/{method}.ckpt', config)
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
     )
-    trainer.test(aada, test_loader)
+    trainer.test(model, test_loader)
 
 
 if __name__ == "__main__":
     config = Config('config.yaml')
-    for set_name, houses in config.test_houses.items():
-        for house in houses:
-            for app_name in config.test_apps:
-                test(set_name, house, app_name,config.data_dir, config.app_alias, config.app_threshs, config.batch_size)
+    method = args.method
+    for set_name, houses_in_set in houses.items():
+        for house in houses_in_set:
+            for app_name in app_names:
+                test(method, set_name, house, app_name,config.data_dir, config.app_alias, config.app_threshs, config.batch_size)

@@ -9,14 +9,8 @@ email: lily231147@gmail.com
 import sys
 sys.path.append('/home/aistudio/external-libraries')
 
-import lightning as L
 import torch
-from torch import nn, optim
-from torch.nn import functional as F
-from torchmetrics.regression import MeanAbsoluteError
-
-WINDOW_SIZE = 1024
-WINDOW_STRIDE = 256
+from torch import nn
 
 
 
@@ -212,7 +206,7 @@ class Decoder(nn.Module):
             x = layer(x, sample)
         return x
     
-class AadaNet(L.LightningModule):
+class AadaNet(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout, n_layers) -> None:
         super().__init__()
         self.up_dim1 = nn.Conv1d(in_channels=1, out_channels=inplates, kernel_size=3, stride=1, padding=1)
@@ -230,7 +224,7 @@ class AadaNet(L.LightningModule):
         self.y_hat = []
         self.thresh = []
 
-    def forward(self, examples, samples):
+    def forward(self, examples, samples, gt_apps=None):
         """
         Args:
             examples (N, L): input examples
@@ -246,72 +240,11 @@ class AadaNet(L.LightningModule):
         samples = self.sample_encoder(samples, examples)
         appliance = self.decoder(samples[-1], samples)
         pred_apps = self.down_dim(appliance)
-        return torch.relu(pred_apps).squeeze(1)
-    
-    def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=1e-4)
-        return optimizer
-    
-    def training_step(self, batch, _):
-        # examples | samples | gt_apps: (N, WINDOE_SIZE)
-        _, examples, samples, gt_apps = batch
-        pred_apps = self(examples, samples)
-        mse = F.mse_loss(pred_apps, gt_apps)
-        self.log('train_loss', mse, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return mse
-    
-    def validation_step(self, batch, _):
-        # tags: (N, 3)
-        # examples | samples | gt_apps: (N, WINDOE_SIZE)
-        threshs, examples, samples, gt_apps = batch
-        pred_apps = self(examples, samples)
-        pred_apps[pred_apps < 15] = 0
-        self.y.extend([tensor for tensor in pred_apps])
-        self.y_hat.extend([tensor for tensor in gt_apps])
-        self.thresh.extend([thresh for thresh in threshs])
-    
-    def on_validation_epoch_end(self):
-        mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
-        mae_on = torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).abs().mean() 
-        self.log('val_mae', mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.y.clear()
-        self.y_hat.clear()
-        self.thresh.clear()
-    
-    def test_step(self, batch, _):
-        threshs, examples, samples, gt_apps = batch
-        pred_apps = self(examples, samples)
-        self.y.extend([tensor for tensor in pred_apps])
-        self.y_hat.extend([tensor for tensor in gt_apps])
-        self.thresh.extend([thresh for thresh in threshs])
-
-    def on_test_epoch_end(self):
-        device = self.thresh[0].device
-        y = reconstruct(self.y).to(device)
-        y_hat = reconstruct(self.y_hat).to(device)
-        mae = (y-y_hat).abs().mean()
-        on_status = y_hat > self.thresh[0]
-        mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 
-        self.log('test_mae', mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.y.clear()
-        self.y_hat.clear()
-        self.thresh.clear()
-
-    
-
-def reconstruct(y):
-    n = len(y)
-    length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
-    depth = WINDOW_SIZE // WINDOW_STRIDE
-    out = torch.full([length, depth], float('nan'))
-    for i, cur in enumerate(y):
-        start = i * WINDOW_STRIDE
-        d = i % depth
-        out[start: start+WINDOW_SIZE, d] = cur
-    out = torch.nanmedian(out, dim=-1).values
-    return out
+        pred_apps = torch.relu(pred_apps).squeeze(1)
+        if self.training:
+            return torch.mean((gt_apps - pred_apps)**2)
+        else:
+            return pred_apps
 
     
     

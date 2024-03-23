@@ -14,7 +14,7 @@ from sconf import Config
 from torch.utils.data import DataLoader
 
 from dataset import NilmDataset
-from model import AadaNet
+from models.aada import AadaNet
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
