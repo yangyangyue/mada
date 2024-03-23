@@ -12,6 +12,8 @@ sys.path.append('/home/aistudio/external-libraries')
 import torch
 from torch import nn
 
+USE_ATTENTION = True
+
 class ResBlock(nn.Module):
     def __init__(self, inplates, midplates) -> None:
         super().__init__()
@@ -25,9 +27,10 @@ class ResBlock(nn.Module):
             nn.Conv1d(in_channels=midplates, out_channels=inplates, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(inplates)
         )
+        self.norm = nn.InstanceNorm1d(256)
     def forward(self, x):
         x = x + self.stream(x)
-        return torch.relu(x)
+        return torch.relu(self.norm(x))
 
 class DownSampleNetwork(nn.Module):
     def __init__(self, inplates, midplates):
@@ -42,11 +45,11 @@ class DownSampleNetwork(nn.Module):
 class UpSampleNetwork(nn.Module):
     def __init__(self, inplates, midplates):
         super().__init__()
-        self.up_sampleer = nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1),
+        self.up_sampler = nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1)
         self.res = ResBlock(inplates, midplates)
 
     def forward(self, x):
-        x = self.up_sampleer(x)
+        x = self.up_sampler(x)
         x = self.res(x)
         return x
     
@@ -94,9 +97,10 @@ class ExampleEncoderLayer(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout) -> None:
         super().__init__()
         self.down_sampler = DownSampleNetwork(inplates, midplates)
-        self.attention = Attention(inplates, n_heads)
-        self.norm = nn.BatchNorm1d(inplates)
-        self.dropout = nn.Dropout(dropout)
+        if USE_ATTENTION:
+            self.attention = Attention(inplates, n_heads)
+            self.norm = nn.BatchNorm1d(inplates)
+            self.dropout = nn.Dropout(dropout)
     
     def forward(self, x):
         """
@@ -104,20 +108,23 @@ class ExampleEncoderLayer(nn.Module):
             x (N, D, L): the features of examples to each encoder layer
         """
         x = self.down_sampler(x)
-        x = self.norm(x).permute(0, 2, 1)
-        x = x + self.dropout(self.attention(x, x, x))
-        return x.permute(0, 2, 1)
+        if USE_ATTENTION:
+            x = self.norm(x).permute(0, 2, 1)
+            x = x + self.dropout(self.attention(x, x, x))
+            return x.permute(0, 2, 1)
+        return x
     
 
 class SampleEncoderLayer(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout) -> None:
         super().__init__()
         self.down_sampler = DownSampleNetwork(inplates, midplates)
-        self.attention1 = Attention(inplates, n_heads)
+        if USE_ATTENTION:
+            self.attention1 = Attention(inplates, n_heads)
+            self.norm1 = nn.BatchNorm1d(inplates)
+            self.dropout1 = nn.Dropout(dropout)
         self.attention2 = Attention(inplates, n_heads)
-        self.norm1 = nn.BatchNorm1d(inplates)
         self.norm2 = nn.BatchNorm1d(inplates)
-        self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
     
     def forward(self, x, y):
@@ -128,9 +135,11 @@ class SampleEncoderLayer(nn.Module):
         """
         y = y.permute(0, 2, 1)
         x = self.down_sampler(x)
-        x = self.norm1(x).permute(0, 2, 1)
-        x = x + self.dropout1(self.attention1(x, x, x))
-        x = self.norm2(x.permute(0, 2, 1)).permute(0, 2, 1)
+        if USE_ATTENTION:
+            x = self.norm1(x).permute(0, 2, 1)
+            x = x + self.dropout1(self.attention1(x, x, x))
+            x = x.permute(0, 2, 1)
+        x = self.norm2(x).permute(0, 2, 1)
         x = x + self.dropout2(self.attention2(x, y, y))
         return x.permute(0, 2, 1)
     
@@ -138,11 +147,12 @@ class DecoderLayer(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout) -> None:
         super().__init__()
         self.up_sampler = UpSampleNetwork(inplates, midplates)
-        self.attention1 = Attention(inplates, n_heads)
+        if USE_ATTENTION:
+            self.attention1 = Attention(inplates, n_heads)
+            self.norm1 = nn.BatchNorm1d(inplates)
+            self.dropout1 = nn.Dropout(dropout)
         self.attention2 = Attention(inplates, n_heads)
-        self.norm1 = nn.BatchNorm1d(inplates)
         self.norm2 = nn.BatchNorm1d(inplates)
-        self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
     
     def forward(self, x, y):
@@ -153,9 +163,11 @@ class DecoderLayer(nn.Module):
         """
         y = y.permute(0, 2, 1)
         x = self.up_sampler(x)
-        x = self.norm1(x).permute(0, 2, 1)
-        x = x + self.dropout1(self.attention1(x, x, x))
-        x = self.norm2(x.permute(0, 2, 1)).permute(0, 2, 1)
+        if USE_ATTENTION:
+            x = self.norm1(x).permute(0, 2, 1)
+            x = x + self.dropout1(self.attention1(x, x, x))
+            x = x.permute(0, 2, 1)
+        x = self.norm2(x).permute(0, 2, 1)
         x = x + self.dropout2(self.attention2(x, y, y))
         return x.permute(0, 2, 1)
     
@@ -182,7 +194,7 @@ class SampleEncoder(nn.Module):
         for example, layer in zip(examples, self.layers):
             x = layer(x, example)
             samples.append(x)
-        return examples
+        return samples
     
 class Decoder(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout, n_layers) -> None:
@@ -209,10 +221,6 @@ class AadaNet(nn.Module):
         self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
         self.decoder = Decoder(inplates, midplates, n_heads, dropout, n_layers)
 
-        self.y = []
-        self.y_hat = []
-        self.thresh = []
-
     def forward(self, examples, samples, gt_apps=None):
         """
         Args:
@@ -228,7 +236,7 @@ class AadaNet(nn.Module):
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
         features = self.res1(samples[-1])
-        pred_apps = self.decoder(features, samples)
+        pred_apps = self.decoder(features, reversed(samples))
         pred_apps = self.res2(pred_apps)
         pred_apps = self.down_dim(pred_apps)
         pred_apps = torch.relu(pred_apps).squeeze(1)

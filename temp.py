@@ -21,3 +21,7 @@ print(np.mean(app_list))
     # plt.legend()
     # plt.show()
     # plt.close()
+
+
+# 问题：模型管理、模型特化、新设备必须重新训练设备模型
+# 其实，也可以直接检索增强，不固定example，直接从知识库中搜索

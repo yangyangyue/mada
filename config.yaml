@@ -14,7 +14,7 @@ alias:
   {
     "kettle": ["kettle"],
     "microwave": ["microwave"],
-    "dishwasher": ["dishwasher", "dish_washer", “dishwaser],
+    "dishwasher": ["dishwasher", "dish_washer", "dishwaser"],
     "washing_machine": ["washing_machine", "washer_dryer"],
     "fridge": ["fridge", "fridge_freezer", "refrigerator"],
   }
