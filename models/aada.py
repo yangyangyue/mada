@@ -12,17 +12,11 @@ sys.path.append('/home/aistudio/external-libraries')
 import torch
 from torch import nn
 
-
-
-class DownSampleNetwork(nn.Module):
-    def __init__(self, inplates, midplates):
+class ResBlock(nn.Module):
+    def __init__(self, inplates, midplates) -> None:
         super().__init__()
-        self.identity = nn.Sequential(
-            nn.Conv1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm1d(inplates),
-        )
         self.stream = nn.Sequential(
-            nn.Conv1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=2, padding=1),
+            nn.Conv1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(midplates),
             nn.ReLU(),
             nn.Conv1d(in_channels=midplates, out_channels=midplates,kernel_size=3, stride=1, padding=1),
@@ -30,37 +24,31 @@ class DownSampleNetwork(nn.Module):
             nn.ReLU(),
             nn.Conv1d(in_channels=midplates, out_channels=inplates, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(inplates)
-
         )
-        self.relu = nn.ReLU()
+    def forward(self, x):
+        x = x + self.stream(x)
+        return torch.relu(x)
+
+class DownSampleNetwork(nn.Module):
+    def __init__(self, inplates, midplates):
+        super().__init__()
+        self.res = ResBlock(inplates, midplates)
 
     def forward(self, x):
-        x = self.stream(x) + self.identity(x)
-        return self.relu(x)
+        x = self.res(x)
+        return torch.max_pool1d(x, kernel_size=2)
 
 
 class UpSampleNetwork(nn.Module):
     def __init__(self, inplates, midplates):
         super().__init__()
-        self.identity = nn.Sequential(
-            nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm1d(inplates),
-        )
-        self.stream = nn.Sequential(
-            nn.ConvTranspose1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm1d(midplates),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=midplates, out_channels=midplates,kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(midplates),
-            nn.ReLU(),
-            nn.Conv1d(in_channels=midplates, out_channels=inplates, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(inplates)
-        )
-        self.relu = nn.ReLU()
+        self.up_sampleer = nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1),
+        self.res = ResBlock(inplates, midplates)
 
     def forward(self, x):
-        x = self.stream(x) + self.identity(x)
-        return self.relu(x)
+        x = self.up_sampleer(x)
+        x = self.res(x)
+        return x
     
 class PositionEmbeddingSine(nn.Module):
     def __init__(self, dropout=0.1):
@@ -211,10 +199,11 @@ class AadaNet(nn.Module):
         super().__init__()
         self.up_dim1 = nn.Conv1d(in_channels=1, out_channels=inplates, kernel_size=3, stride=1, padding=1)
         self.up_dim2 = nn.Conv1d(in_channels=1, out_channels=inplates, kernel_size=3, stride=1, padding=1)
+        self.res1 = ResBlock(inplates, midplates)
+        self.res2 = ResBlock(inplates, midplates)
         self.down_dim = nn.Conv1d(in_channels=inplates, out_channels=1, kernel_size=3, stride=1, padding=1)
 
-        self.pe1 = PositionEmbeddingSine()
-        self.pe2 = PositionEmbeddingSine()
+        self.pe = PositionEmbeddingSine()
 
         self.example_encoder = ExampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
         self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
@@ -233,16 +222,18 @@ class AadaNet(nn.Module):
         # examples | samples: (N, D, L)
         examples = self.up_dim1(examples[:, None, :])
         samples = self.up_dim2(samples[:, None, :])
-        examples = examples + self.pe1(examples)
-        samples = samples + self.pe2(samples)
+        examples = examples + self.pe(examples)
+        samples = samples + self.pe(samples)
 
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
-        appliance = self.decoder(samples[-1], samples)
-        pred_apps = self.down_dim(appliance)
+        features = self.res1(samples[-1])
+        pred_apps = self.decoder(features, samples)
+        pred_apps = self.res2(pred_apps)
+        pred_apps = self.down_dim(pred_apps)
         pred_apps = torch.relu(pred_apps).squeeze(1)
         if self.training:
-            return torch.mean((gt_apps - pred_apps)**2)
+            return ((gt_apps - pred_apps)**2).mean()
         else:
             return pred_apps
 

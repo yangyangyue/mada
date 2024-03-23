@@ -17,7 +17,6 @@ from torch.utils.data import DataLoader, random_split
 
 from dataset import NilmDataset
 from lightning_module import NilmNet
-from models.aada import AadaNet
 
 houses = { "ukdale": ["house_1", "house_5"] }
 app_names = ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
@@ -36,7 +35,7 @@ def train(method, config):
     """
     pl.seed_everything(42, workers=True)
 
-    train_set = NilmDataset(houses, app_names, config.data_dir, config.app_alias, config.app_threshs)
+    train_set = NilmDataset(houses, app_names, config.data_dir, config.alias, config.threshs)
     train_set, val_set = random_split(train_set, [0.8, 0.2])
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=18)
     val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)

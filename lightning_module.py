@@ -1,10 +1,10 @@
+import math
 import sys
 sys.path.append('/home/aistudio/external-libraries')
 
 import lightning as L
 import torch
-from torch import nn, optim
-from torch.nn import functional as F
+from torch.optim.lr_scheduler import LambdaLR
 
 from models.aada import AadaNet
 from models.vae import VaeNet
@@ -17,6 +17,7 @@ WINDOW_STRIDE = 256
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, config) -> None:
         super().__init__()
+        self.config = config
         if net_name == 'aada':
             self.model = AadaNet(
                 inplates=config.inplates, 
@@ -35,9 +36,6 @@ class NilmNet(L.LightningModule):
     def forward(self, examples, samples, gt_apps=None):
         return self.model(examples, samples, gt_apps)
     
-    def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=1e-3)
-        return optimizer
     
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
@@ -85,8 +83,35 @@ class NilmNet(L.LightningModule):
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
-
     
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-3)
+        scheduler = {
+            "scheduler": self.exponential_scheduler(
+                optimizer,
+                200,
+                self.config.lr,
+                self.config.min_lr
+            ),
+            "name": "learning_rate",
+            "interval": "step",
+            "frequency": 1
+        }
+        return [optimizer], [scheduler]
+    
+    @staticmethod
+    def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
+        def lr_lambda(x):
+            if x > warmup_steps:
+                if lr * gamma ** (x - warmup_steps) > min_lr:
+                    return gamma ** (x - warmup_steps)
+                else:
+                    return min_lr / lr
+            else:
+                return x / warmup_steps
+
+        return LambdaLR(optimizer, lr_lambda=lr_lambda)
+
 
 def reconstruct(y):
     n = len(y)

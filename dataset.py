@@ -153,19 +153,17 @@ class NilmDataset(Dataset):
     """
     build unified dataset for all appliances
     """
-    def __init__(self, houses, apps,  data_dir, app_alias, app_threshs):
+    def __init__(self, houses, apps,  data_dir, alias, threshs):
         datasets = []
         # build dataset for appliances in ukdale
         if 'ukdale' in houses:
             dir = Path(data_dir) / 'ukdale'
-            app_alias = app_alias['ukdale']
-            datasets += [UkdaleDataset(dir,  house, app_name, app_alias[app_name], app_threshs[app_name]) 
+            datasets += [UkdaleDataset(dir,  house, app_name, alias[app_name], threshs[app_name]) 
                             for house in houses['ukdale'] for app_name in apps]
         # build dataset for appliances in redd
         if 'redd' in houses:
             dir = Path(data_dir) / 'redd'
-            app_alias = app_alias['redd']
-            datasets += [ReddDataset(dir, house, app_name, app_alias[app_name], app_threshs[app_name]) 
+            datasets += [ReddDataset(dir, house, app_name, alias[app_name], threshs[app_name]) 
                             for house in houses['redd'] for app_name in apps]
         self.dataset = ConcatDataset(datasets)
         

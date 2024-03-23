@@ -40,7 +40,7 @@ def test(method, set_name, house, app_name, data_dir, app_alias, app_threshs, ba
     test_set = NilmDataset({set_name: [house]}, [app_name], data_dir, app_alias, app_threshs)
     test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=18)
 
-    model = NilmNet.load_from_checkpoint(f'checkpoints/{method}.ckpt', config)
+    model = NilmNet.load_from_checkpoint(f'checkpoints/{method}.ckpt', net_name=method, config=config)
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
@@ -54,4 +54,4 @@ if __name__ == "__main__":
     for set_name, houses_in_set in houses.items():
         for house in houses_in_set:
             for app_name in app_names:
-                test(method, set_name, house, app_name,config.data_dir, config.app_alias, config.app_threshs, config.batch_size)
+                test(method, set_name, house, app_name,config.data_dir, config.alias, config.threshs, config.batch_size)
