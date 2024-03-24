@@ -11,7 +11,7 @@ import sys
 sys.path.append('/home/aistudio/external-libraries')
 
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from sconf import Config
 from torch.utils.data import DataLoader, random_split
 
@@ -41,6 +41,8 @@ def train(method, config):
     val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)
 
     model = NilmNet(method, config)
+    
+    # checkpoint
     filename = method
     for set_name, houses_in_set in houses.items():
         filename += f'-{set_name[0]}'
@@ -52,12 +54,15 @@ def train(method, config):
         dirpath='checkpoints/',
         filename=filename
     )
+
+    # early stopping
+    early_stop_callback = EarlyStopping(monitor="val_mae", patience=10, mode="min")
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
         max_epochs=config.max_epochs,
         log_every_n_steps=15,
-        callbacks=[checkpoint_callback]
+        callbacks=[checkpoint_callback, early_stop_callback]
     )
 
     trainer.fit(model, train_loader, val_loader)

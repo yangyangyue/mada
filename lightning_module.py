@@ -41,7 +41,7 @@ class NilmNet(L.LightningModule):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         _, examples, samples, gt_apps = batch
         loss = self(examples, samples, gt_apps)
-        self.log('loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('loss', loss, on_epoch=True, prog_bar=True, logger=True)
         return loss
     
     def validation_step(self, batch, _):
@@ -56,9 +56,13 @@ class NilmNet(L.LightningModule):
     
     def on_validation_epoch_end(self):
         mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
+
         mae_on = torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).abs().mean() 
+        mre_on = torch.concat([(y[y_hat>thresh] - y_hat[y_hat>thresh]).abs() / y_hat[y_hat>thresh]
+                                for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).mean() 
         self.log('val_mae', mae, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val_mre_on', mre_on, on_epoch=True, prog_bar=True, logger=True)
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
@@ -78,8 +82,10 @@ class NilmNet(L.LightningModule):
         mae = (y-y_hat).abs().mean()
         on_status = y_hat > self.thresh[0]
         mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 
+        mre_on = ((y[on_status]-y_hat[on_status]).abs() / y_hat[on_status]).mean() 
         self.log('test_mae', mae, on_epoch=True, prog_bar=True, logger=True)
         self.log('test_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_mre_on', mre_on, on_epoch=True, prog_bar=True, logger=True)
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
