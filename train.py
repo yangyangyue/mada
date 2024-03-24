@@ -41,10 +41,16 @@ def train(method, config):
     val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)
 
     model = NilmNet(method, config)
+    filename = method
+    for set_name, houses_in_set in houses.items():
+        filename += f'-{set_name[0]}'
+        for house in houses_in_set:
+            filename += f'-{house[-1]}'
+    for app_name in app_names:
+        filename += f'-{app_name[0]}'
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',
-        filename=method,
-        save_last=True
+        filename=filename
     )
     trainer = pl.Trainer(
         devices="auto",
