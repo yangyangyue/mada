@@ -64,6 +64,14 @@ class AbstractDataset(Dataset):
             self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.example = self.load_example()
 
+        # for ukdale house_1, only select 15% of data
+        if self.set_name == 'ukdale' and self.house == 'house_1':
+            num = len(self.samples)
+            ind = np.random.permutation(num)
+            select_ids = ind[: int(0.15 * num)]
+            self.samples = self.samples[select_ids]
+            self.apps = self.apps[select_ids]
+
     def __len__(self):
         return len(self.samples)
 

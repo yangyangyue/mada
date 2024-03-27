@@ -1,4 +1,3 @@
-conda activate aada
 cd ..
 python train.py --method vae --house u15 --apps k
 python train.py --method vae --house u15 --apps m
