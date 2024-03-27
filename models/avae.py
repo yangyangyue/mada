@@ -44,7 +44,7 @@ class VaeNet(nn.Module):
         super(VaeNet, self).__init__()
 
         # encoder
-        self.layer1_0 = VaeEncoderBlock(in_channel=1, kernel_size=3, stride=1)
+        self.layer1_0 = VaeEncoderBlock(in_channel=2, kernel_size=3, stride=1)
         self.layer1_1 = nn.MaxPool1d(kernel_size=2)
         self.layer2_0 = VaeEncoderBlock(in_channel=256, kernel_size=3, stride=1)
         self.layer2_1 = nn.MaxPool1d(kernel_size=2)
@@ -85,10 +85,11 @@ class VaeNet(nn.Module):
         reconstruct_loss = torch.mean((apps - apps_pred)**2)
         return kl_loss + reconstruct_loss
 
-    def forward(self, _, aggs, apps=None):
+    def forward(self, examples, aggs, apps=None):
         """ vae forward, she shape of aggs is `(bs, 1, L)` """
         # encoder
-        x10 = self.layer1_0(aggs[:, None, :])
+        x = torch.cat([examples[:, None, :], aggs[:, None, :]], dim=1)
+        x10 = self.layer1_0(x)
         x11 = self.layer1_1(x10)
         x20 = self.layer2_0(x11)
         x21 = self.layer2_1(x20)

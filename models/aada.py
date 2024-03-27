@@ -12,10 +12,8 @@ sys.path.append('/home/aistudio/external-libraries')
 import torch
 from torch import nn
 
-USE_ATTENTION = True
-
 class ResBlock(nn.Module):
-    def __init__(self, inplates, midplates) -> None:
+    def __init__(self, inplates, midplates, outplates) -> None:
         super().__init__()
         self.stream = nn.Sequential(
             nn.Conv1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=1, padding=1),
@@ -24,7 +22,7 @@ class ResBlock(nn.Module):
             nn.Conv1d(in_channels=midplates, out_channels=midplates,kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(midplates),
             nn.ReLU(),
-            nn.Conv1d(in_channels=midplates, out_channels=inplates, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(in_channels=midplates, out_channels=outplates, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(inplates)
         )
         self.norm = nn.InstanceNorm1d(256)
@@ -94,10 +92,11 @@ class Attention(nn.Module):
         return self.out(v)
     
 class ExampleEncoderLayer(nn.Module):
-    def __init__(self, inplates, midplates, n_heads, dropout) -> None:
+    def __init__(self, inplates, midplates, n_heads, dropout, self_attention, up=False) -> None:
         super().__init__()
+        self.self_attention = self_attention
         self.down_sampler = DownSampleNetwork(inplates, midplates)
-        if USE_ATTENTION:
+        if self.self_attention:
             self.attention = Attention(inplates, n_heads)
             self.norm = nn.BatchNorm1d(inplates)
             self.dropout = nn.Dropout(dropout)
@@ -108,7 +107,7 @@ class ExampleEncoderLayer(nn.Module):
             x (N, D, L): the features of examples to each encoder layer
         """
         x = self.down_sampler(x)
-        if USE_ATTENTION:
+        if self.self_attention:
             x = self.norm(x).permute(0, 2, 1)
             x = x + self.dropout(self.attention(x, x, x))
             return x.permute(0, 2, 1)
@@ -116,10 +115,11 @@ class ExampleEncoderLayer(nn.Module):
     
 
 class SampleEncoderLayer(nn.Module):
-    def __init__(self, inplates, midplates, n_heads, dropout) -> None:
+    def __init__(self, inplates, midplates, n_heads, dropout, self_attention) -> None:
         super().__init__()
+        self.self_attention = self_attention
         self.down_sampler = DownSampleNetwork(inplates, midplates)
-        if USE_ATTENTION:
+        if self.self_attention:
             self.attention1 = Attention(inplates, n_heads)
             self.norm1 = nn.BatchNorm1d(inplates)
             self.dropout1 = nn.Dropout(dropout)
@@ -135,7 +135,7 @@ class SampleEncoderLayer(nn.Module):
         """
         y = y.permute(0, 2, 1)
         x = self.down_sampler(x)
-        if USE_ATTENTION:
+        if self.self_attention:
             x = self.norm1(x).permute(0, 2, 1)
             x = x + self.dropout1(self.attention1(x, x, x))
             x = x.permute(0, 2, 1)
@@ -144,10 +144,11 @@ class SampleEncoderLayer(nn.Module):
         return x.permute(0, 2, 1)
     
 class DecoderLayer(nn.Module):
-    def __init__(self, inplates, midplates, n_heads, dropout) -> None:
+    def __init__(self, inplates, midplates, n_heads, dropout, self_attention) -> None:
         super().__init__()
+        self.self_attention = self_attention
         self.up_sampler = UpSampleNetwork(inplates, midplates)
-        if USE_ATTENTION:
+        if self.self_attention:
             self.attention1 = Attention(inplates, n_heads)
             self.norm1 = nn.BatchNorm1d(inplates)
             self.dropout1 = nn.Dropout(dropout)
@@ -163,7 +164,7 @@ class DecoderLayer(nn.Module):
         """
         y = y.permute(0, 2, 1)
         x = self.up_sampler(x)
-        if USE_ATTENTION:
+        if self.self_attention:
             x = self.norm1(x).permute(0, 2, 1)
             x = x + self.dropout1(self.attention1(x, x, x))
             x = x.permute(0, 2, 1)
@@ -175,7 +176,8 @@ class DecoderLayer(nn.Module):
 class ExampleEncoder(nn.Module):
     def __init__(self, inplates, midplates, n_heads, dropout, n_layers) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([ExampleEncoderLayer(inplates, midplates, n_heads, dropout) for _ in range(n_layers)])
+        self.layers = nn.ModuleList([ExampleEncoderLayer(inplates, midplates, n_heads, dropout, up=(i==0)) 
+                                     for i in range(n_layers)])
     
     def forward(self, x):
         examples = []
@@ -207,19 +209,13 @@ class Decoder(nn.Module):
         return x
     
 class AadaNet(nn.Module):
-    def __init__(self, inplates, midplates, n_heads, dropout, n_layers) -> None:
+    def __init__(self, inplates, midplates, n_heads, dropout, n_layers, self_attention, variation) -> None:
         super().__init__()
-        self.up_dim1 = nn.Conv1d(in_channels=1, out_channels=inplates, kernel_size=3, stride=1, padding=1)
-        self.up_dim2 = nn.Conv1d(in_channels=1, out_channels=inplates, kernel_size=3, stride=1, padding=1)
-        self.res1 = ResBlock(inplates, midplates)
-        self.res2 = ResBlock(inplates, midplates)
-        self.down_dim = nn.Conv1d(in_channels=inplates, out_channels=1, kernel_size=3, stride=1, padding=1)
-
-        self.pe = PositionEmbeddingSine()
-
-        self.example_encoder = ExampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
-        self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers)
-        self.decoder = Decoder(inplates, midplates, n_heads, dropout, n_layers)
+        # self.pe = PositionEmbeddingSine()
+        self.variation = variation
+        self.example_encoder = ExampleEncoder(inplates, midplates, n_heads, dropout, n_layers, self_attention)
+        self.sample_encoder = SampleEncoder(inplates, midplates, n_heads, dropout, n_layers, self_attention)
+        self.decoder = Decoder(inplates, midplates, n_heads, dropout, n_layers, self_attention)
 
     def forward(self, examples, samples, gt_apps=None):
         """
@@ -227,18 +223,9 @@ class AadaNet(nn.Module):
             examples (N, L): input examples
             samples (N, L): input samples
         """
-        # examples | samples: (N, D, L)
-        examples = self.up_dim1(examples[:, None, :])
-        samples = self.up_dim2(samples[:, None, :])
-        examples = examples + self.pe(examples)
-        samples = samples + self.pe(samples)
-
-        examples = self.example_encoder(examples)
-        samples = self.sample_encoder(samples, examples)
-        features = self.res1(samples[-1])
-        pred_apps = self.decoder(features, reversed(samples))
-        pred_apps = self.res2(pred_apps)
-        pred_apps = self.down_dim(pred_apps)
+        examples = self.example_encoder(examples[:, None, :])
+        samples = self.sample_encoder(samples[:, None, :], examples)
+        pred_apps = self.decoder(samples[-1], reversed(samples))
         pred_apps = torch.relu(pred_apps).squeeze(1)
         if self.training:
             return ((gt_apps - pred_apps)**2).mean()

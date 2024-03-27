@@ -37,10 +37,10 @@ python train.py --method aada
 houses = { "ukdale": ["house_1", "house_5"] }
 app_names = ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
 ```
-测试命令如下，其中method指定算法，包括$aada$, $vae$, $s2s$。
+测试命令如下，其中method指定算法，包括$aada$, $vae$, $s2s$；ckpt指定checkpoint文件名称，该文件格式为{method}-{set}(house_ids)-{appliances}-epoch={epoch}.
 
 ```python
-python train.py --method aada
+python train.py --method aada --ckpt aada-u15-kmdwf-epoch=87
 ```
 
 ## 性能
@@ -69,7 +69,14 @@ axios.post('http://127.0.0.1:8080/predict/', {
 
 ## 技术架构
 
-本项目算法部分基于python和lightning实现，$models$目录下存放个算法对应模型的pytorch实现。$lightning\_module.py$下$NilmNet$负责所有模型的训练、验证、测试。
+本项目算法部分基于python和lightning实现，$models$目录下存放个算法对应模型的pytorch实现。$lightning\_module.py$下$NilmNet$负责所有模型的训练、验证、测试。models目录结构如下：
+
+```
+|-- aada.py: 本文提出的设备自适应分解算法
+|-- avae.py: 基于vae架构的设备自适应分解算法
+|-- vae.py: 复现的vae实验
+|-- s2s.py: 复现的s2s实验
+```
 
 
 

@@ -18,15 +18,8 @@ from torch.utils.data import DataLoader, random_split
 from dataset import NilmDataset
 from lightning_module import NilmNet
 
-houses = { "ukdale": ["house_1", "house_5"] }
-app_names = ["kettle", "microwave", "dishwasher", "washing_machine", "fridge"]
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--method', type=str, default='aada')
-args = parser.parse_args()
-
-
-def train(method, config):
+def train(method, config, houses, app_names):
     """
     Train a Nougat model using the provided configuration.
 
@@ -35,11 +28,13 @@ def train(method, config):
     """
     pl.seed_everything(42, workers=True)
 
+    # data
     train_set = NilmDataset(houses, app_names, config.data_dir, config.alias, config.threshs)
     train_set, val_set = random_split(train_set, [0.8, 0.2])
     train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True, num_workers=18)
     val_loader = DataLoader(val_set, batch_size=config.batch_size, num_workers=18)
 
+    # model
     model = NilmNet(method, config)
     
     # checkpoint
@@ -47,16 +42,19 @@ def train(method, config):
     for set_name, houses_in_set in houses.items():
         filename += f'-{set_name[0]}'
         for house in houses_in_set:
-            filename += f'-{house[-1]}'
+            filename += f'{house[-1]}'
+    filename += '-'
     for app_name in app_names:
-        filename += f'-{app_name[0]}'
+        filename += f'{app_name[0]}'
+    filename += '-{epoch}'
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',
-        filename=filename
+        filename=filename,
+        monitor="val_mae"
     )
 
     # early stopping
-    early_stop_callback = EarlyStopping(monitor="val_mae", patience=10, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
@@ -67,7 +65,29 @@ def train(method, config):
 
     trainer.fit(model, train_loader, val_loader)
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--method', type=str, default='aada')
+parser.add_argument('--houses', type=str, default='u15')
+parser.add_argument('--apps', type=str, default='k')
+args = parser.parse_args()
+
+ch2set = {
+    'u': 'ukdale',
+    'd': 'redd',
+    'f': 'refit'
+}
+ch2app = {
+    'k': 'kettle',
+    'm': 'microwave',
+    'd': 'dishwasher',
+    'w': 'washing_machine',
+    'f': 'fridge'
+}
+
 if __name__ == "__main__":
     config = Config('config.yaml')
     method = args.method
-    train(method, config)
+    houses = {ch2set[ele[0]]: [f'house_{id}' for id in ele[1:]]
+              for ele in args.houses.split('-')}
+    app_names = [ch2app[ele] for ele in args.apps]
+    train(method, config, houses, app_names)

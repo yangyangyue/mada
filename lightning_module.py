@@ -20,11 +20,13 @@ class NilmNet(L.LightningModule):
         self.config = config
         if net_name == 'aada':
             self.model = AadaNet(
-                inplates=config.inplates, 
+                plates=config.plates, 
                 midplates=config.midplates, 
                 n_heads=config.n_heads, 
                 dropout=config.dropout, 
-                n_layers=config.n_layers
+                n_layers=config.n_layers,
+                self_attention = config.self_attention,
+                variation = config.variation
             )
         elif net_name == 'vae':
             self.model = VaeNet()
