@@ -19,6 +19,8 @@ from torch.utils.data import Dataset, ConcatDataset
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256
 
+balance = False
+
 
 def read_power(path, sampling):
     """If cached, read dataframe from cache, or read dataframe from path and cache it otherwise"""
@@ -65,7 +67,7 @@ class AbstractDataset(Dataset):
             self.example = self.load_example()
 
         # for ukdale house_1, only select 15% of data
-        if self.set_name == 'ukdale' and self.house == 'house_1':
+        if balance and self.set_name == 'ukdale' and self.house == 'house_1':
             num = len(self.samples)
             ind = np.random.permutation(num)
             select_ids = ind[: int(0.15 * num)]

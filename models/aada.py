@@ -12,9 +12,10 @@ sys.path.append('/home/aistudio/external-libraries')
 import torch
 from torch import nn
 
-class ResBlock(nn.Module):
-    def __init__(self, inplates, midplates, outplates) -> None:
+class IbnBlock(nn.Module):
+    def __init__(self, inplates, midplates, outplates, use_ins=True) -> None:
         super().__init__()
+        self.use_ins = use_ins
         self.stream = nn.Sequential(
             nn.Conv1d(in_channels=inplates, out_channels=midplates, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(midplates),
@@ -23,17 +24,19 @@ class ResBlock(nn.Module):
             nn.BatchNorm1d(midplates),
             nn.ReLU(),
             nn.Conv1d(in_channels=midplates, out_channels=outplates, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(inplates)
+            nn.BatchNorm1d(outplates)
         )
         self.norm = nn.InstanceNorm1d(256)
     def forward(self, x):
         x = x + self.stream(x)
-        return torch.relu(self.norm(x))
+        if self.use_ins:
+            x = self.norm(x)
+        return torch.relu(x)
 
 class DownSampleNetwork(nn.Module):
-    def __init__(self, inplates, midplates):
+    def __init__(self, inplates, midplates, outplates, use_ins=True):
         super().__init__()
-        self.res = ResBlock(inplates, midplates)
+        self.res = IbnBlock(inplates, midplates, outplates, use_ins)
 
     def forward(self, x):
         x = self.res(x)
@@ -41,10 +44,10 @@ class DownSampleNetwork(nn.Module):
 
 
 class UpSampleNetwork(nn.Module):
-    def __init__(self, inplates, midplates):
+    def __init__(self, inplates, midplates, outplates, use_ins=True):
         super().__init__()
         self.up_sampler = nn.ConvTranspose1d(in_channels=inplates, out_channels=inplates, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.res = ResBlock(inplates, midplates)
+        self.res = IbnBlock(inplates, midplates, outplates, use_ins)
 
     def forward(self, x):
         x = self.up_sampler(x)
