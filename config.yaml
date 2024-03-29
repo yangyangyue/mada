@@ -1,6 +1,4 @@
 data_dir: "../nilm_lf"
-max_epochs: 100
-batch_size: 96
 plates: 256
 midplates: 64
 n_heads: 8
@@ -8,33 +6,5 @@ dropout: 0.1
 n_layers: 6
 self_attention: True
 variation: True
-
 lr: 1e-3
 min_lr: 1e-4
-
-alias:
-  {
-    "kettle": ["kettle"],
-    "microwave": ["microwave"],
-    "dishwasher": ["dishwasher", "dish_washer", "dishwaser"],
-    "washing_machine": ["washing_machine", "washer_dryer"],
-    "fridge": ["fridge", "fridge_freezer", "refrigerator"],
-  }
-
-threshs:
-  {
-    "kettle": 2000,
-    "fridge": 50,
-    "washing_machine": 20,
-    "microwave": 200,
-    "dishwasher": 10,
-  }
-
-ceils:
-  {
-    "kettle": 3100,
-    "fridge": 300,
-    "washing_machine": 2500,
-    "microwave": 3000,
-    "dishwasher": 2500,
-  }

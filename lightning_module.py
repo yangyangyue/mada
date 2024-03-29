@@ -1,6 +1,10 @@
-import math
-import sys
-sys.path.append('/home/aistudio/external-libraries')
+
+from pathlib import Path
+
+from torch.utils.data import ConcatDataset, DataLoader
+
+from dataset import ReddDataset, UkdaleDataset, random_split
+from models.avae import AvaeNet
 
 import lightning as L
 import torch
@@ -13,24 +17,59 @@ from models.vae import VaeNet
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
 
+abb2name = {
+    'k': 'kettle',
+    'm': 'microwave',
+    'd': 'dishwasher',
+    'w': 'washing_machine',
+    'f': 'fridge'
+}
+
+alias = {
+    "kettle": ["kettle"],
+    "microwave": ["microwave"],
+    "dishwasher": ["dishwasher", "dish_washer", "dishwaser"],
+    "washing_machine": ["washing_machine", "washer_dryer"],
+    "fridge": ["fridge", "fridge_freezer", "refrigerator"],
+  }
+
+threshs ={
+    "kettle": 2000,
+    "fridge": 50,
+    "washing_machine": 20,
+    "microwave": 200,
+    "dishwasher": 10,
+}
+
+ceils = {
+    "kettle": 3100,
+    "fridge": 300,
+    "washing_machine": 2500,
+    "microwave": 3000,
+    "dishwasher": 2500,
+}
+
 
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, config) -> None:
         super().__init__()
+        self.batch_size = None
         self.config = config
         if net_name == 'aada':
             self.model = AadaNet(
-                plates=config.plates, 
-                midplates=config.midplates, 
-                n_heads=config.n_heads, 
+                self_attention=config.self_attention, 
+                channels=config.channels,
                 dropout=config.dropout, 
+                n_heads=config.n_heads, 
+                mid_channels=config.mid_channels, 
+                use_ins=False, 
                 n_layers=config.n_layers,
-                self_attention = config.self_attention,
                 variation = config.variation
             )
         elif net_name == 'vae':
             self.model = VaeNet()
-
+        elif net_name == 'avae':
+            self.model = AvaeNet()
         self.y = []
         self.y_hat = []
         self.thresh = []
@@ -132,3 +171,45 @@ def reconstruct(y):
         out[start: start+WINDOW_SIZE, d] = cur
     out = torch.nanmedian(out, dim=-1).values
     return out
+
+class NilmDataModule(L.LightningDataModule):
+    def __init__(self, houses, app_names,  data_dir, batch_size = 32):
+        super().__init__()
+        self.houses = houses
+        self.app_names = app_names
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+
+    def setup(self, stage):
+        houses = {ele[0]: [f'house_{id}' for id in ele[1:]] for ele in self.houses.split('_')}
+        app_names = [abb2name[ele] for ele in self.apps]
+        datasets = []
+        # build dataset for appliances in ukdale
+        if 'u' in self.houses:
+            dir = Path(self.data_dir) / 'ukdale'
+            datasets += [UkdaleDataset(dir,  house, app_name, alias[app_name], threshs[app_name]) 
+                            for house in houses['u'] for app_name in app_names]
+        # build dataset for appliances in redd
+        if 'd' in self.houses:
+            dir = Path(self.data_dir) / 'redd'
+            datasets += [ReddDataset(dir, house, app_name, alias[app_name], threshs[app_name]) 
+                            for house in houses['d'] for app_name in app_names]
+        dataset = ConcatDataset(datasets)
+
+        if stage == 'fit':
+            self.train_set, self.val_set = random_split(dataset, [0.8, 0.2])
+        else:
+            self.test_set = self.dataset
+
+    def train_dataloader(self):
+        print('batch size:', self.batch_size)
+        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=18)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_set, batch_size=self.batch_size, num_workers=18)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_set, batch_size=self.batch_size, num_workers=18)
+
+    def predict_dataloader(self):
+        return DataLoader(self.test_set, batch_size=self.batch_size, num_workers=18)

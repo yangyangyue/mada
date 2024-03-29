@@ -9,12 +9,9 @@ import hashlib
 from pathlib import Path
 import tempfile
 
-import sys
-sys.path.append('/home/aistudio/external-libraries')
-
 import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset, ConcatDataset
+from torch.utils.data import Dataset
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256
@@ -157,29 +154,3 @@ class ReddDataset(AbstractDataset):
         house_data[house_data < 5] = 0
         house_data = house_data.clip(lower=0, upper=cutoff, axis=1).to_numpy(dtype=np.float32)
         return house_data[:, 0], house_data[:, 1]
-
-
-class NilmDataset(Dataset):
-    """
-    build unified dataset for all appliances
-    """
-    def __init__(self, houses, apps,  data_dir, alias, threshs):
-        datasets = []
-        # build dataset for appliances in ukdale
-        if 'ukdale' in houses:
-            dir = Path(data_dir) / 'ukdale'
-            datasets += [UkdaleDataset(dir,  house, app_name, alias[app_name], threshs[app_name]) 
-                            for house in houses['ukdale'] for app_name in apps]
-        # build dataset for appliances in redd
-        if 'redd' in houses:
-            dir = Path(data_dir) / 'redd'
-            datasets += [ReddDataset(dir, house, app_name, alias[app_name], threshs[app_name]) 
-                            for house in houses['redd'] for app_name in apps]
-        self.dataset = ConcatDataset(datasets)
-        
-    def __getitem__(self, index):
-        return self.dataset[index]
-    
-    def __len__(self):
-        return len(self.dataset)
-    
