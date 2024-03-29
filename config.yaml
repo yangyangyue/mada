@@ -1,6 +1,6 @@
 data_dir: "../nilm_lf"
-plates: 256
-midplates: 64
+channels: 256
+mid_channels: 64
 n_heads: 8
 dropout: 0.1
 n_layers: 6
