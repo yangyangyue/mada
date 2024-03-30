@@ -1,16 +1,14 @@
 
 from pathlib import Path
 
-from torch.utils.data import ConcatDataset, DataLoader
-
-from dataset import ReddDataset, UkdaleDataset, random_split
-from models.avae import AvaeNet
-
 import lightning as L
 import torch
 from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import ConcatDataset, DataLoader, random_split
 
+from dataset import ReddDataset, UkdaleDataset
 from models.aada import AadaNet
+from models.avae import AvaeNet
 from models.vae import VaeNet
 
 
@@ -182,7 +180,7 @@ class NilmDataModule(L.LightningDataModule):
 
     def setup(self, stage):
         houses = {ele[0]: [f'house_{id}' for id in ele[1:]] for ele in self.houses.split('_')}
-        app_names = [abb2name[ele] for ele in self.apps]
+        app_names = [abb2name[ele] for ele in self.app_names]
         datasets = []
         # build dataset for appliances in ukdale
         if 'u' in self.houses:

@@ -9,7 +9,7 @@ from torch import nn
 
 class IbnNet(nn.Module):
     def __init__(self, in_channels, mid_channels, out_channels, use_ins=True):
-        super(self).__init__()
+        super().__init__()
         self.use_ins = use_ins
         self.in_channels = in_channels
         self.out_channels = out_channels

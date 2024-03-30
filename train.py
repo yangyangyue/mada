@@ -12,19 +12,21 @@ import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.tuner import Tuner
 from sconf import Config
+import torch
 
 from lightning_module import NilmDataModule, NilmNet
 
 
-def train(method, config, houses, app_names):
+def train(method, config, houses, app_names, tags):
     pl.seed_everything(42, workers=True)
+    torch.set_float32_matmul_precision('high')
     # model and data
     model = NilmNet(method, config)
     data_module = NilmDataModule(houses, app_names, config.data_dir)
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints/',
-        filename=f'{method}-{houses}-{app_names}' + '-{epoch}',
+        filename=f'{method}{tags}-{houses}-{app_names}' + '-{epoch}',
         monitor="val_mae"
     )
     early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
@@ -38,7 +40,7 @@ def train(method, config, houses, app_names):
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module)
     # do train and validation
-    trainer.fit(model, data_module=data_module)
+    trainer.fit(model, datamodule=data_module)
 
 
 if __name__ == "__main__":
@@ -47,7 +49,8 @@ if __name__ == "__main__":
     parser.add_argument('--method', type=str, default='aada')
     parser.add_argument('--houses', type=str, default='u15')
     parser.add_argument('--apps', type=str, default='k')
+    parser.add_argument('--tags', type=str, default='')
     args = parser.parse_args()
     config = Config('config.yaml')
     # train
-    train(args.method, config, args.houses, args.apps)
+    train(args.method, config, args.houses, args.apps, args.tags)

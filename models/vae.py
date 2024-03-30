@@ -11,7 +11,7 @@ from models.ibn import IbnNet
 
 class VaeNet(nn.Module):
     def __init__(self, mid_channels=64, out_channels=256, window_size=1024):
-        super(self).__init__()
+        super().__init__()
 
         # encoder
         self.layer1_0 = IbnNet(1, mid_channels, out_channels)
