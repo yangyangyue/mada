@@ -1,5 +1,6 @@
 
 from pathlib import Path
+import re
 
 import lightning as L
 import torch
@@ -14,38 +15,6 @@ from models.vae import VaeNet
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
-
-abb2name = {
-    'k': 'kettle',
-    'm': 'microwave',
-    'd': 'dishwasher',
-    'w': 'washing_machine',
-    'f': 'fridge'
-}
-
-alias = {
-    "kettle": ["kettle"],
-    "microwave": ["microwave"],
-    "dishwasher": ["dishwasher", "dish_washer", "dishwaser"],
-    "washing_machine": ["washing_machine", "washer_dryer"],
-    "fridge": ["fridge", "fridge_freezer", "refrigerator"],
-  }
-
-threshs ={
-    "kettle": 2000,
-    "fridge": 50,
-    "washing_machine": 20,
-    "microwave": 200,
-    "dishwasher": 10,
-}
-
-ceils = {
-    "kettle": 3100,
-    "fridge": 300,
-    "washing_machine": 2500,
-    "microwave": 3000,
-    "dishwasher": 2500,
-}
 
 
 class NilmNet(L.LightningModule):
@@ -171,36 +140,31 @@ def reconstruct(y):
     return out
 
 class NilmDataModule(L.LightningDataModule):
-    def __init__(self, houses, app_names,  data_dir, batch_size = 32):
+    def __init__(self, houses, app_abbs, data_dir):
         super().__init__()
         self.houses = houses
-        self.app_names = app_names
+        self.app_abbs = app_abbs
         self.data_dir = data_dir
-        self.batch_size = batch_size
+        self.batch_size = None
 
     def setup(self, stage):
-        houses = {ele[0]: [f'house_{id}' for id in ele[1:]] for ele in self.houses.split('_')}
-        app_names = [abb2name[ele] for ele in self.app_names]
         datasets = []
-        # build dataset for appliances in ukdale
-        if 'u' in self.houses:
-            dir = Path(self.data_dir) / 'ukdale'
-            datasets += [UkdaleDataset(dir,  house, app_name, alias[app_name], threshs[app_name]) 
-                            for house in houses['u'] for app_name in app_names]
-        # build dataset for appliances in redd
-        if 'd' in self.houses:
-            dir = Path(self.data_dir) / 'redd'
-            datasets += [ReddDataset(dir, house, app_name, alias[app_name], threshs[app_name]) 
-                            for house in houses['d'] for app_name in app_names]
+        for houses_in_set in self.houses.split('_'):
+            match = re.match(r'^(\w+)(\d+)$', houses_in_set)
+            set_name, house_ids = match.groups()
+            dir = Path(self.data_dir) / set_name
+            if set_name == 'ukdale':
+                datasets += [UkdaleDataset(dir, f'house_{idx}', app_abb) for idx in house_ids for app_abb in self.app_abbs]
+            else:
+                datasets += [ReddDataset(dir, f'house_{idx}', app_abb) for idx in house_ids for app_abb in self.app_abbs]
         dataset = ConcatDataset(datasets)
 
         if stage == 'fit':
             self.train_set, self.val_set = random_split(dataset, [0.8, 0.2])
         else:
-            self.test_set = self.dataset
+            self.test_set = dataset
 
     def train_dataloader(self):
-        print('batch size:', self.batch_size)
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=18)
 
     def val_dataloader(self):

@@ -52,7 +52,7 @@ def get_example(set_name, house, app_name, app_alias, thresh=30):
             plt.plot(apps_in_window, label=app_name)
             plt.legend(loc="upper right")
             # if click the figure, saving it
-            fig.canvas.mpl_connect('button_press_event', lambda _: np.savetxt(f'examples/{set_name}_{house}_{app_name}.csv', apps_in_window, fmt="%.2f"))
+            fig.canvas.mpl_connect('button_press_event', lambda _: np.savetxt(f'examples/{set_name}{house[-1]}{app_name[0]}.csv', apps_in_window, fmt="%.2f"))
             plt.show()
             plt.close(fig)
 

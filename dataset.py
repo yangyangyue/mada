@@ -18,6 +18,16 @@ WINDOW_STRIDE = 256
 
 balance = False
 
+threshs ={"k": 2000, "m": 200, "d": 10, "w": 20, "f": 50}
+alias = {
+    "k": ["kettle"],
+    "m": ["microwave"],
+    "d": ["dishwasher", "dish_washer", "dishwaser"],
+    "w": ["washing_machine", "washer_dryer"],
+    "f": ["fridge", "fridge_freezer", "refrigerator"],
+}
+
+
 
 def read_power(path, sampling):
     """If cached, read dataframe from cache, or read dataframe from path and cache it otherwise"""
@@ -46,22 +56,23 @@ def add_power(power1, power2):
 
 class AbstractDataset(Dataset):
     """ designed for one appliance in one house """
-    def __init__(self, dir, set_name, house, app_name, app_alias, app_thresh) -> None:
+    def __init__(self, dir, set_name, house, app_abb) -> None:
         super().__init__()
-        print(f'{house}-{app_name}')
         self.dir = dir
         self.set_name = set_name
         self.house = house
-        self.app_name = app_name
-        self.app_alias = app_alias
-        self.app_thresh = app_thresh
+        self.app_alias = alias[app_abb]
+        self.app_thresh = threshs[app_abb]
+
+        print(f'{house}-{app_abb} loading...')
         self.samples, self.apps = self.load_data()
         if len(self.samples) < WINDOW_SIZE:
             self.samples, self.apps, self.example = [], [], None
         else:
             self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.example = self.load_example()
+            path = Path('examples') / f'{self.set_name}{self.house[-1]}{app_abb}.csv'
+            self.example = np.loadtxt(path, dtype=np.float32)
 
         # for ukdale house_1, only select 15% of data
         if balance and self.set_name == 'ukdale' and self.house == 'house_1':
@@ -78,24 +89,13 @@ class AbstractDataset(Dataset):
         """ the shape of each part is  (window_size, ) """
         return self.app_thresh, self.example, self.samples[idx], self.apps[idx]
     
-    def load_example(self):
-        """
-        return examples in random order
-
-        Args:
-            n_examples: the examples will be duplicated to meet the num
-        """
-        path = Path('examples') / f'{self.set_name}_{self.house}_{self.app_name}.csv'
-        example = np.loadtxt(path, dtype=np.float32)
-        return example
-    
     def load_data(self, cutoff=6000, sampling='6s'):
-        """ return samples and apps, this method is implemented by specific dataset"""
+        """ return samples and apps, this method is implemented by specific dataset """
         raise NotImplementedError('this method must be implemented by sub-class!')
     
 class UkdaleDataset(AbstractDataset):
-    def __init__(self, dir, house, app_name, app_alias, app_thresh) -> None:
-        super().__init__(dir, 'ukdale', house, app_name, app_alias, app_thresh)
+    def __init__(self, dir, house, app_abb) -> None:
+        super().__init__(dir, 'ukdale', house, app_abb)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -116,7 +116,6 @@ class UkdaleDataset(AbstractDataset):
             new_data = read_power(dir / f"channel_{channel}.dat", sampling)
             app_data = add_power(app_data, new_data)
         house_data = pd.merge(house_data, app_data, on='stamp')
-        house_data.columns = ['aggregate', self.app_name]
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
         house_data[house_data < 5] = 0
@@ -124,8 +123,8 @@ class UkdaleDataset(AbstractDataset):
         return house_data[:, 0], house_data[:, 1]
     
 class ReddDataset(AbstractDataset):
-    def __init__(self, dir, house, app_name, app_alias, app_thresh) -> None:
-        super().__init__(dir, 'redd', house, app_name, app_alias, app_thresh)
+    def __init__(self, dir, house, app_abb) -> None:
+        super().__init__(dir, 'redd', house, app_abb)
 
     def load_data(self, cutoff=6000, sampling='6s'):
         dir = self.dir / self.house
@@ -148,7 +147,6 @@ class ReddDataset(AbstractDataset):
             new_data = read_power(dir / f'channel_{channel}.dat', sampling)
             app_data = add_power(app_data, new_data)
         house_data = pd.merge(house_data, app_data, on='stamp')
-        house_data.columns = ['aggregate', self.app_name]
         # 4. process data including dropna, clip, etc.
         house_data = house_data.dropna()
         house_data[house_data < 5] = 0
