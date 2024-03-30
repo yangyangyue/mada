@@ -25,7 +25,7 @@ def test(method, config, houses, app_abb, ckpt):
     trainer = pl.Trainer(devices="auto", accelerator="auto")
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module, method='test', mode='binsearch')
-    trainer.test(model, datamodule=data_module)
+    trainer.test(model, datamodule=data_module, verbose=False)
 
 
 if __name__ == "__main__":

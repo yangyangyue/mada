@@ -91,9 +91,9 @@ class NilmNet(L.LightningModule):
         on_status = y_hat > self.thresh[0]
         mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 
         mre_on = ((y[on_status]-y_hat[on_status]).abs() / y_hat[on_status]).mean() 
-        self.log('test_mae', mae, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_mre_on', mre_on, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_mae', mae)
+        self.log('test_mae_on', mae_on)
+        self.log('test_mre_on', mre_on)
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
@@ -140,12 +140,12 @@ def reconstruct(y):
     return out
 
 class NilmDataModule(L.LightningDataModule):
-    def __init__(self, houses, app_abbs, data_dir):
+    def __init__(self, houses, app_abbs, data_dir, batch_size=1):
         super().__init__()
         self.houses = houses
         self.app_abbs = app_abbs
         self.data_dir = data_dir
-        self.batch_size = None
+        self.batch_size = batch_size
 
     def setup(self, stage):
         datasets = []

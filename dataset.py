@@ -64,7 +64,7 @@ class AbstractDataset(Dataset):
         self.app_alias = alias[app_abb]
         self.app_thresh = threshs[app_abb]
 
-        print(f'{house}-{app_abb} loading...')
+        print(f'{set_name}-{house}-{app_abb} loading...')
         self.samples, self.apps = self.load_data()
         if len(self.samples) < WINDOW_SIZE:
             self.samples, self.apps, self.example = [], [], None
