@@ -22,7 +22,7 @@ def test(method, houses, app_abb, ckpt, config):
 
     model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config)
     data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'))
-    trainer = pl.Trainer(devices="auto", accelerator="auto")
+    trainer = pl.Trainer(devices="auto", accelerator="auto", precision=config.get('default', 'precision'))
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module, method='test')
     return trainer.test(model, datamodule=data_module, verbose=False)[0]

@@ -36,7 +36,8 @@ def train(args, config):
         devices="auto",
         accelerator="auto",
         callbacks=[checkpoint_callback, early_stop_callback],
-        log_every_n_steps=1
+        log_every_n_steps=1,
+        precision=config.get('default', 'precision')
     )
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module)
