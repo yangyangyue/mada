@@ -7,23 +7,26 @@ email: lily231147@gmail.com
 """
 
 import argparse
+import configparser
 
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.tuner import Tuner
-from sconf import Config
+import torch
 
 from lightning_module import NilmDataModule, NilmNet
 
-
-def train(method, config, houses, app_abbs, tags):
+def train(args, config):
+    # init
     pl.seed_everything(42, workers=True)
+    torch.set_float32_matmul_precision('high')
+    method, houses, app_abbs, tags =args.method, args.houses, args.apps, args.tags
     # model and data
-    model = NilmNet(method, config)
-    data_module = NilmDataModule(houses, app_abbs, config.data_dir)
+    model = NilmNet(args.method, config)
+    data_module = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'))
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
-    dirpath='~/checkpoints/',
+        dirpath='~/checkpoints/',
         filename=f'{method}{tags}-{houses}-{app_abbs}' + '-{epoch}',
         monitor="val_mae"
     )
@@ -50,6 +53,8 @@ if __name__ == "__main__":
     parser.add_argument('--apps', type=str, default='k')
     parser.add_argument('--tags', type=str, default='')
     args = parser.parse_args()
-    config = Config('config.yaml')
+    # config
+    config = configparser.ConfigParser()
+    config.read('config.ini')
     # train
-    train(args.method, config, args.houses, args.apps, args.tags)
+    train(args, config)

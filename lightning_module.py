@@ -21,17 +21,19 @@ class NilmNet(L.LightningModule):
     def __init__(self, net_name, config) -> None:
         super().__init__()
         self.batch_size = None
-        self.config = config
+        self.lr = config.getfloat('default', 'lr')
+        self.min_lr = config.getfloat('default', 'min_lr')
         if net_name == 'aada':
+            sec = config['aada']
             self.model = AadaNet(
-                self_attention=config.self_attention, 
-                channels=config.channels,
-                dropout=config.dropout, 
-                n_heads=config.n_heads, 
-                mid_channels=config.mid_channels, 
+                self_attention=sec.getboolean('self_attention'), 
+                channels=sec.getint('channels'),
+                dropout=sec.getfloat('dropout'),
+                n_heads=sec.getint('n_heads'),
+                mid_channels=sec.getint('mid_channels'),
                 use_ins=False, 
-                n_layers=config.n_layers,
-                variation = config.variation
+                n_layers=sec.getint('n_layers'),
+                variation = sec.getboolean('variation')
             )
         elif net_name == 'vae':
             self.model = VaeNet()
@@ -104,8 +106,8 @@ class NilmNet(L.LightningModule):
             "scheduler": self.exponential_scheduler(
                 optimizer,
                 200,
-                self.config.lr,
-                self.config.min_lr
+                self.lr,
+                self.min_lr
             ),
             "name": "learning_rate",
             "interval": "step",

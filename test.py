@@ -7,19 +7,21 @@ email: lily231147@gmail.com
 """
 
 import argparse
+import configparser
 
 import lightning.pytorch as pl
 from lightning.pytorch.tuner import Tuner
-from sconf import Config
+import torch
 
 from lightning_module import NilmDataModule, NilmNet
 
 
-def test(method, config, houses, app_abb, ckpt):
+def test(method, houses, app_abb, ckpt, config):
     pl.seed_everything(42, workers=True)
+    torch.set_float32_matmul_precision('high')
 
     model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config)
-    data_module = NilmDataModule(houses, app_abb, config.data_dir)
+    data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'))
     trainer = pl.Trainer(devices="auto", accelerator="auto", precision='bf16-mixed')
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module, method='test')
@@ -34,7 +36,8 @@ if __name__ == "__main__":
     parser.add_argument('--apps', type=str, default='k')
     args = parser.parse_args()
 
-    config = Config('config.yaml')
-    metrics = {app_abb: test(args.method, config, args.houses, app_abb,  args.ckpt) for app_abb in args.apps}
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    metrics = {app_abb: test(args.method, args.houses, app_abb,  args.ckpt, config) for app_abb in args.apps}
     print(metrics)
         
