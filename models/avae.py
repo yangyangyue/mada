@@ -1,9 +1,11 @@
 """
-Reproduced model of VAE
+MIT License
+Copyright (c) 2024-present lily.
 
 written by lily
 email: lily231147@gmail.com
 """
+
 import torch
 from torch import nn
 

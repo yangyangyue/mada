@@ -35,9 +35,8 @@ def train(args, config):
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
-        max_epochs=1000,
         callbacks=[checkpoint_callback, early_stop_callback],
-        precision='bf16-mixed'
+        log_every_n_steps=1
     )
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module)

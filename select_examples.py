@@ -1,7 +1,10 @@
-# Copyright 2023 lily. All rights reserved.
-#
-# Author: lily
-# Email: lily231147@proton.me
+"""
+MIT License
+Copyright (c) 2024-present lily.
+
+written by lily
+email: lily231147@gmail.com
+"""
 
 import matplotlib.pyplot as plt
 import numpy as np
