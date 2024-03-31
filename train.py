@@ -12,14 +12,12 @@ import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.tuner import Tuner
 from sconf import Config
-import torch
 
 from lightning_module import NilmDataModule, NilmNet
 
 
 def train(method, config, houses, app_abbs, tags):
     pl.seed_everything(42, workers=True)
-    torch.set_float32_matmul_precision('high')
     # model and data
     model = NilmNet(method, config)
     data_module = NilmDataModule(houses, app_abbs, config.data_dir)
@@ -35,10 +33,11 @@ def train(method, config, houses, app_abbs, tags):
         devices="auto",
         accelerator="auto",
         max_epochs=1000,
-        callbacks=[checkpoint_callback, early_stop_callback]
+        callbacks=[checkpoint_callback, early_stop_callback],
+        precision='bf16-mixed'
     )
     tuner = Tuner(trainer)
-    tuner.scale_batch_size(model, datamodule=data_module, mode='binsearch')
+    tuner.scale_batch_size(model, datamodule=data_module)
     # do train and validation
     trainer.fit(model, datamodule=data_module)
 

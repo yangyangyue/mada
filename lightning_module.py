@@ -149,7 +149,7 @@ class NilmDataModule(L.LightningDataModule):
 
     def setup(self, stage):
         datasets = []
-        for houses_in_set in self.houses.split('_'):
+        for houses_in_set in self.houses.split('-'):
             match = re.match(r'^(\D+)(\d+)$', houses_in_set)
             set_name, house_ids = match.groups()
             dir = Path(self.data_dir) / set_name

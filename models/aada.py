@@ -138,7 +138,7 @@ class DecoderLayer(nn.Module):
         self.attention2 = Attention(channels, n_heads)
         self.norm2 = nn.BatchNorm1d(channels)
         self.dropout2 = nn.Dropout(dropout)
-        self.up_net = UpNet(channels, mid_channels, channels, use_ins)
+        self.up_net = UpNet(channels, mid_channels, use_ins)
     
     def forward(self, preds, samples):
         """

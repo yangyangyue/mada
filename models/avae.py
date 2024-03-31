@@ -62,7 +62,7 @@ class AvaeNet(nn.Module):
             aggs: (N, L)
         """
         # encoder
-        x = torch.stack([examples, apps], dim=1)
+        x = torch.stack([examples, aggs], dim=1)
         x10 = self.layer1_0(x)
         x11 = self.layer1_1(x10)
         x20 = self.layer2_0(x11)
