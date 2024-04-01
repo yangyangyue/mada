@@ -35,9 +35,11 @@ def train(args, config):
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
+        max_epochs=-1,
         callbacks=[checkpoint_callback, early_stop_callback],
         log_every_n_steps=1,
-        precision=config.get('default', 'precision')
+        precision=config.get('default', 'precision'),
+        min_epochs=100
     )
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module)

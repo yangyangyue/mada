@@ -199,7 +199,7 @@ class AadaNet(nn.Module):
         self.ibn_tokenizer2 = IbnNet(1, mid_channels, channels)
         self.pe = PositionEmbeddingSine()
         self.ibn_encoder = IbnNet(channels, mid_channels, channels)
-        self.ibn_decoder = IbnNet(channels, mid_channels, channels)
+        self.ibn_decoder = IbnNet(1, mid_channels, channels)
         self.variation = variation
         if self.variation:
             length = window_size // (1 << 6)
@@ -224,6 +224,7 @@ class AadaNet(nn.Module):
         samples = samples + self.pe(samples)
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
+        # z: (N, D, L)
         z = self.ibn_encoder(samples[-1])
         z = z.flatten(start_dim=1)
         if self.variation:
