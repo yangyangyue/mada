@@ -54,11 +54,6 @@ refit_channels = {
 
 def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     """ read a dataframe of a specific appliance or mains """
-    temp_dir = Path(tempfile.gettempdir())
-    father_path = temp_dir / hashlib.sha256(f'{set_name}{house_id}-{app_abb}{channel}'.encode()).hexdigest()
-    if father_path.exists():
-        return pd.read_feather(father_path)
-    father_path.parent.mkdir(parents=True, exist_ok=True)
     if set_name == 'ukdale':
         if not app_abb:
             channel = 1
@@ -76,7 +71,6 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df = df.resample('6s').mean().ffill(limit=30).dropna()
     df[df < 5] = 0
     df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
-    df.to_feather(father_path)
     return df
 
 def load_app(data_dir, set_name, house_id, app_abb):
@@ -127,7 +121,14 @@ class NilmDataset(Dataset):
         return self.app_thresh, self.example, self.samples[idx], self.apps[idx]
     
     def load_data(self):
-        aggs = load_agg(self.dir, self.set_name, self.house_id)
-        apps = load_app(self.dir, self.set_name, self.house_id, self.app_abb)
-        powers = pd.merge(aggs, apps, on='stamp').to_numpy(dtype=np.float32)
+        temp_dir = Path(tempfile.gettempdir())
+        temp_path = temp_dir / hashlib.sha256(f'{self.set_name}{self.house_id}-{self.app_abb}'.encode()).hexdigest()
+        if temp_path.exists():
+            powers = np.load(temp_path)
+        else:
+            aggs = load_agg(self.dir, self.set_name, self.house_id)
+            apps = load_app(self.dir, self.set_name, self.house_id, self.app_abb)
+            powers = pd.merge(aggs, apps, on='stamp').to_numpy(dtype=np.float32)
+            temp_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(temp_path, powers)
         return powers[:, 0], powers[:, 1]
