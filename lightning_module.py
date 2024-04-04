@@ -161,7 +161,7 @@ class NilmDataModule(L.LightningDataModule):
         for houses_in_set in self.houses.split('-'):
             match = re.match(r'^(\D+)(\d+)$', houses_in_set)
             set_name, house_ids = match.groups()
-            datasets += [NilmDataset(Path(self.data_dir), set_name, house_id, app_abb) for house_id in house_ids for app_abb in self.app_abbs]
+            datasets += [NilmDataset(Path(self.data_dir), set_name, int(house_id), app_abb) for house_id in house_ids for app_abb in self.app_abbs]
         dataset = ConcatDataset(datasets)
 
         if stage == 'fit':
