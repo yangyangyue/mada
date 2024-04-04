@@ -14,7 +14,7 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import ConcatDataset, DataLoader, random_split
 
-from dataset import ReddDataset, UkdaleDataset
+from dataset import NilmDataset, ReddDataset, UkdaleDataset
 from models.aada import AadaNet
 from models.avae import AvaeNet
 from models.vae import VaeNet
@@ -161,11 +161,7 @@ class NilmDataModule(L.LightningDataModule):
         for houses_in_set in self.houses.split('-'):
             match = re.match(r'^(\D+)(\d+)$', houses_in_set)
             set_name, house_ids = match.groups()
-            dir = Path(self.data_dir) / set_name
-            if set_name == 'ukdale':
-                datasets += [UkdaleDataset(dir, f'house_{idx}', app_abb) for idx in house_ids for app_abb in self.app_abbs]
-            else:
-                datasets += [ReddDataset(dir, f'house_{idx}', app_abb) for idx in house_ids for app_abb in self.app_abbs]
+            datasets += [NilmDataset(Path(self.data_dir), set_name, house_id, app_abb) for house_id in house_ids for app_abb in self.app_abbs]
         dataset = ConcatDataset(datasets)
 
         if stage == 'fit':
