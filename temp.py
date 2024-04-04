@@ -1,7 +1,7 @@
-import configparser
-config = configparser.ConfigParser().read('config.ini')
-print(config)
+import pandas as pd
 
+
+df = pd.read_csv('C:\\Users\\21975\\Downloads\\nilm_lf\\refit\\CLEAN_House1.csv')
 # from sconf import Config
 # import numpy as np
 # import matplotlib.pyplot as plt

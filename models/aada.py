@@ -220,8 +220,10 @@ class AadaNet(nn.Module):
         """
         examples = self.ibn_tokenizer1(examples[:, None, :])
         samples = self.ibn_tokenizer2(samples[:, None, :])
-        examples = examples + self.pe(examples)
-        samples = samples + self.pe(samples)
+        # position embeddings
+        # examples = examples + self.pe(examples)
+        # samples = samples + self.pe(samples)
+        # encode
         examples = self.example_encoder(examples)
         samples = self.sample_encoder(samples, examples)
         # z: (N, D, L)
@@ -235,6 +237,7 @@ class AadaNet(nn.Module):
             z = eps * std + mu
         else:
             z = self.z_linear(z)
+        # decode
         pred_apps = self.ibn_decoder(z[:, None, :])
         pred_apps = self.decoder(pred_apps, reversed(samples))
         pred_apps = self.conv_struct(pred_apps)
