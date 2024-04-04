@@ -75,7 +75,7 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df = df.set_index('stamp')
     df = df.resample('6s').mean().ffill(limit=30).dropna()
     df[df < 5] = 0
-    df = df.clip(lower=0, upper=6000 if app_abb == 'a' else ceils[app_abb])
+    df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
     df.to_feather(father_path)
     return df
 

@@ -1,3 +1,4 @@
+rm -rf lightning_logs
 # train vae from ukdale15
 python train.py --method vae --houses ukdale15 --apps k
 python train.py --method vae --houses ukdale15 --apps m

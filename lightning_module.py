@@ -14,7 +14,7 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import ConcatDataset, DataLoader, random_split
 
-from dataset import NilmDataset, ReddDataset, UkdaleDataset
+from dataset import NilmDataset
 from models.aada import AadaNet
 from models.avae import AvaeNet
 from models.vae import VaeNet
