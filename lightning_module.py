@@ -61,9 +61,7 @@ class NilmNet(L.LightningModule):
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
         samples, gt_apps, examples, threshs, ceils = batch
-        samples = samples / 6000
-        examples = examples / ceils[:, None, None]
-        gt_apps = gt_apps / ceils[:, None]
+        gt_apps = gt_apps 
         loss = self(examples, samples, gt_apps)
         self.log('loss', loss, on_epoch=True, prog_bar=True, logger=True)
         return loss
@@ -72,9 +70,7 @@ class NilmNet(L.LightningModule):
         # tags: (N, 3)
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
-        samples = samples / 6000
-        examples = examples / ceils[:, None, None]
-        pred_apps = self(examples, samples) * ceils[:, None]
+        pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
@@ -82,7 +78,6 @@ class NilmNet(L.LightningModule):
     
     def on_validation_epoch_end(self):
         mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
-
         mae_on = torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).abs().mean() 
         mre_on = torch.concat([(y[y_hat>thresh] - y_hat[y_hat>thresh]).abs() / y_hat[y_hat>thresh]
                                 for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).mean() 
@@ -95,11 +90,9 @@ class NilmNet(L.LightningModule):
     
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
-        samples = samples / 6000
-        examples = examples / ceils[:, None, None]
-        pred_apps = self(examples, samples) * ceils[:, None]
+        pred_apps = self(examples, samples)
         pred_apps[pred_apps < 15] = 0
-        self.x.extend([tensor for tensor in examples])
+        self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
         self.thresh.extend([thresh for thresh in threshs])
@@ -175,7 +168,7 @@ class NilmDataModule(L.LightningDataModule):
             # just load dataset of one appliance in one house
             match = re.match(r'^(\D+)(\d+)$', self.houses)
             set_name, house_ids = match.groups()
-            self.test_set = NilmDataset(Path(self.data_dir), set_name, int(house_ids), app_abb, stage)
+            self.test_set = NilmDataset(Path(self.data_dir), set_name, int(house_ids), self.app_abbs, stage)
             return
         with ThreadPoolExecutor(16) as executor:
             future_map = {}
