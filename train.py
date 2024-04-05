@@ -30,15 +30,14 @@ def train(args, config):
         filename=f'{method}{tags}-{houses}-{app_abbs}' + '-{epoch}',
         monitor="val_mae"
     )
-    early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
+    # early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
     # trainer
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
-        max_epochs=-1,
-        callbacks=[checkpoint_callback, early_stop_callback],
-        log_every_n_steps=1,
-        min_epochs=100
+        max_epochs=200,
+        callbacks=[checkpoint_callback],
+        log_every_n_steps=10
     )
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module)

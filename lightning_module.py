@@ -53,6 +53,7 @@ class NilmNet(L.LightningModule):
         self.y = []
         self.y_hat = []
         self.thresh = []
+        self.losses = []
     
     def forward(self, examples, samples, gt_apps=None):
         return self.model(examples, samples, gt_apps)
@@ -63,8 +64,12 @@ class NilmNet(L.LightningModule):
         samples, gt_apps, examples, threshs, ceils = batch
         gt_apps = gt_apps 
         loss = self(examples, samples, gt_apps)
-        self.log('loss', loss, on_epoch=True, prog_bar=True, logger=True)
+        self.losses.append(loss.item())
         return loss
+    
+    def on_train_batch_end(self) -> None:
+        self.log('loss', np.mean(self.losses), on_epoch=True, prog_bar=True, logger=True)
+        self.losses.clear()
     
     def validation_step(self, batch, _):
         # tags: (N, 3)
@@ -114,7 +119,7 @@ class NilmNet(L.LightningModule):
         print('test_mae', mae, 'test_mae_on', mae_on, 'test_mre_on', mre_on)
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
         # scheduler = {
         #     "scheduler": self.exponential_scheduler(
         #         optimizer,
@@ -182,7 +187,7 @@ class NilmDataModule(L.LightningDataModule):
         datasets = [ConcatDataset([future.result() for future in as_completed(future_map[app_abb])]) for app_abb in self.app_abbs]
         # balance the number of samples of diiferent appliances
         min_length = min(len(dataset) for dataset in datasets)
-        max_length = min_length * 1.5
+        max_length = int(min_length * 1.5)
         balanced_datasets = []
         for dataset in datasets:
             if len(dataset) > max_length:

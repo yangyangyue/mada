@@ -11,7 +11,6 @@ import configparser
 from pathlib import Path
 
 import lightning.pytorch as pl
-from lightning.pytorch.tuner import Tuner
 import torch
 
 from lightning_module import NilmDataModule, NilmNet
@@ -25,8 +24,6 @@ def test(method, houses, app_abb, ckpt, config):
     model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config, save_path=save_path)
     data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'))
     trainer = pl.Trainer(devices="auto", accelerator="auto")
-    tuner = Tuner(trainer)
-    tuner.scale_batch_size(model, datamodule=data_module, method='test')
     trainer.test(model, datamodule=data_module, verbose=False)
 
 
