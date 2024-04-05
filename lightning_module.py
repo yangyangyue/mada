@@ -66,8 +66,7 @@ class NilmNet(L.LightningModule):
         loss = self(examples, samples, gt_apps)
         self.losses.append(loss.item())
         return loss
-    
-    def on_train_batch_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
         self.log('loss', np.mean(self.losses), on_epoch=True, prog_bar=True, logger=True)
         self.losses.clear()
     
@@ -120,32 +119,31 @@ class NilmNet(L.LightningModule):
     
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        # scheduler = {
-        #     "scheduler": self.exponential_scheduler(
-        #         optimizer,
-        #         200,
-        #         self.lr,
-        #         self.min_lr
-        #     ),
-        #     "name": "learning_rate",
-        #     "interval": "step",
-        #     "frequency": 1
-        # }
-        # return [optimizer], [scheduler]
-        return optimizer
+        scheduler = {
+            "scheduler": self.exponential_scheduler(
+                optimizer,
+                200,
+                self.lr,
+                self.min_lr
+            ),
+            "name": "learning_rate",
+            "interval": "step",
+            "frequency": 1
+        }
+        return [optimizer], [scheduler]
     
-    # @staticmethod
-    # def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
-    #     def lr_lambda(x):
-    #         if x > warmup_steps:
-    #             if lr * gamma ** (x - warmup_steps) > min_lr:
-    #                 return gamma ** (x - warmup_steps)
-    #             else:
-    #                 return min_lr / lr
-    #         else:
-    #             return x / warmup_steps
+    @staticmethod
+    def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
+        def lr_lambda(x):
+            if x > warmup_steps:
+                if lr * gamma ** (x - warmup_steps) > min_lr:
+                    return gamma ** (x - warmup_steps)
+                else:
+                    return min_lr / lr
+            else:
+                return x / warmup_steps
 
-    #     return LambdaLR(optimizer, lr_lambda=lr_lambda)
+        return LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
 def reconstruct(y):
