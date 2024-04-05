@@ -195,7 +195,7 @@ class Decoder(nn.Module):
 class AadaNet(nn.Module):
     def __init__(self, self_attention, channels, n_heads, dropout, mid_channels, use_ins, n_layers, variation, window_size=1024) -> None:
         super().__init__()
-        self.ibn_tokenizer1 = IbnNet(1, mid_channels, channels)
+        self.ibn_tokenizer1 = IbnNet(3, mid_channels, channels)
         self.ibn_tokenizer2 = IbnNet(1, mid_channels, channels)
         self.pe = PositionEmbeddingSine()
         self.ibn_encoder = IbnNet(channels, mid_channels, channels)
@@ -215,10 +215,10 @@ class AadaNet(nn.Module):
     def forward(self, examples, samples, gt_apps=None):
         """
         Args:
-            examples (N, L): input examples
+            examples (N, 3, L): input examples
             samples (N, L): input samples
         """
-        examples = self.ibn_tokenizer1(examples[:, None, :])
+        examples = self.ibn_tokenizer1(examples)
         samples = self.ibn_tokenizer2(samples[:, None, :])
         # position embeddings
         # examples = examples + self.pe(examples)

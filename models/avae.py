@@ -16,7 +16,7 @@ class AvaeNet(nn.Module):
         super().__init__()
 
         # encoder
-        self.layer1_0 = IbnNet(1+10, mid_channels, out_channels)
+        self.layer1_0 = IbnNet(1+3, mid_channels, out_channels)
         self.layer1_1 = nn.MaxPool1d(kernel_size=2)
         self.layer2_0 = IbnNet(out_channels, mid_channels, out_channels)
         self.layer2_1 = nn.MaxPool1d(kernel_size=2)

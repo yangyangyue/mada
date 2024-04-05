@@ -88,15 +88,15 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
 
 class NilmDataset(Dataset):
     """ designed for one appliance in one house """
-    def __init__(self, dir, set_name, house_id, app_abb) -> None:
+    def __init__(self, dir, set_name, house_id, app_abb, stage) -> None:
         super().__init__()
+        print(f'{set_name}-{house_id}-{app_abb} is loading...')
         self.dir = dir
         self.set_name = set_name
-        self.house_id = int(house_id)
+        self.house_id = house_id
         self.app_abb = app_abb
         self.app_thresh = threshs[app_abb]
-
-        print(f'{set_name}-{house_id}-{app_abb} loading...')
+        self.app_ceil = ceils[app_abb]
         self.samples, self.apps = self.load_data()
         if len(self.samples) < WINDOW_SIZE:
             self.samples, self.apps, self.example = [], [], None
@@ -104,21 +104,31 @@ class NilmDataset(Dataset):
             self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.example = np.load(Path('examples') / f'{set_name}{house_id}-{app_abb}.npy')
+            self.example = np.clip(self.example, 0, self.app_ceil)
+        if stage != 'fit':
+            return 
+        # for ukdale house_1, only select 15% of data
+        if self.set_name == 'ukdale' and self.house_id == 1:
+            num = len(self.samples)
+            ind = np.random.permutation(num)
+            select_ids = ind[: int(0.15 * num)]
+            self.samples = self.samples[select_ids]
+            self.apps = self.apps[select_ids]
 
-        # # for ukdale house_1, only select 15% of data
-        # if self.set_name == 'ukdale' and self.house_id == 1:
-        #     num = len(self.samples)
-        #     ind = np.random.permutation(num)
-        #     select_ids = ind[: int(0.15 * num)]
-        #     self.samples = self.samples[select_ids]
-        #     self.apps = self.apps[select_ids]
+        # balance the number of samples
+        pos_idx = np.nonzero(np.any(self.apps >= self.app_thresh, axis=1))[0]
+        neg_idx = np.nonzero(np.any(self.apps < self.app_thresh, axis=1))[0]
+        if len(pos_idx) < len(neg_idx):
+            neg_idx = np.random.choice(neg_idx, len(pos_idx), replace=False)
+        self.samples = np.cat([self.samples[pos_idx], self.samples[neg_idx]])
+        self.apps = np.cat([self.apps[pos_idx], self.apps[neg_idx]])
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         """ the shape of each part is  (window_size, ) """
-        return self.app_thresh, self.example, self.samples[idx], self.apps[idx]
+        return self.samples[idx], self.apps[idx], self.example, self.app_thresh, self.app_ceil
     
     def load_data(self):
         temp_dir = Path(tempfile.gettempdir())

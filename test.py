@@ -8,6 +8,7 @@ email: lily231147@gmail.com
 
 import argparse
 import configparser
+from pathlib import Path
 
 import lightning.pytorch as pl
 from lightning.pytorch.tuner import Tuner
@@ -19,13 +20,14 @@ from lightning_module import NilmDataModule, NilmNet
 def test(method, houses, app_abb, ckpt, config):
     pl.seed_everything(42, workers=True)
     torch.set_float32_matmul_precision('high')
-
-    model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config)
+    save_path = Path('results') / f'{method}-{houses}-{app_abb}.csv'
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config, save_path=save_path)
     data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'))
-    trainer = pl.Trainer(devices="auto", accelerator="auto", precision=config.get('default', 'precision'))
+    trainer = pl.Trainer(devices="auto", accelerator="auto")
     tuner = Tuner(trainer)
     tuner.scale_batch_size(model, datamodule=data_module, method='test')
-    return trainer.test(model, datamodule=data_module, verbose=False)[0]
+    trainer.test(model, datamodule=data_module, verbose=False)
 
 
 if __name__ == "__main__":
@@ -38,6 +40,6 @@ if __name__ == "__main__":
 
     config = configparser.ConfigParser()
     config.read('config.ini')
-    metrics = {app_abb: test(args.method, args.houses, app_abb,  args.ckpt, config) for app_abb in args.apps}
-    print(metrics)
+    for app_abb in args.apps:
+        test(args.method, args.houses, app_abb,  args.ckpt, config)
         

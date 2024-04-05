@@ -19,7 +19,8 @@ plt.rc("font", family="Times New Roman")
 
 WINDOW_LENGTH = 1024
 WINDOW_STRIDE = 256
-n_examples = 10
+N = 3
+dir = Path("C:\\Users\\21975\Downloads\\nilm_lf")
 
 def get_example(data_dir, set_name, house_id, app_abb, channel, n):
     """ save examples """
@@ -52,17 +53,17 @@ def get_example(data_dir, set_name, house_id, app_abb, channel, n):
 
 
 if __name__ == '__main__':
-    # for app_abb, house_channels in dataset.ukdale_channels.items():
-    #     for house_id, channels in house_channels.items():
-    #         examples = []
-    #         for i, channel in enumerate(channels):
-    #             examples.extend(get_example(Path("C:\\Users\\21975\Downloads\\nilm_lf"), 'ukdale', house_id, app_abb, channel, (n_examples+i) // len(channels)))
-    #         np.save(Path('examples') / f'ukdale{house_id}-{app_abb}.npy', np.stack(examples))
+    for app_abb, house_channels in dataset.ukdale_channels.items():
+        for house_id, channels in house_channels.items():
+            examples = []
+            for i, channel in enumerate(channels):
+                examples.extend(get_example(dir, 'ukdale', house_id, app_abb, channel, (N+i) // len(channels)))
+            np.save(Path('examples') / f'ukdale{house_id}-{app_abb}.npy', np.stack(examples))
     for app_abb, house_channels in dataset.refit_channels.items():
         for house_id, channels in house_channels.items():
             examples = []
             for i, channel in enumerate(channels):
-                examples.extend(get_example(Path("C:\\Users\\21975\Downloads\\nilm_lf"), 'refit', house_id, app_abb, channel, (n_examples+i) // len(channels)))
+                examples.extend(get_example(dir, 'refit', house_id, app_abb, channel, (N+i) // len(channels)))
             np.save(Path('examples') / f'refit{house_id}-{app_abb}.npy', np.stack(examples))
 
 
