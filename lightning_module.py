@@ -55,13 +55,14 @@ class NilmNet(L.LightningModule):
         self.thresh = []
     
     def forward(self, examples, samples, gt_apps=None):
-        samples = samples / 6000
         return self.model(examples, samples, gt_apps)
     
     
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
         samples, gt_apps, examples, threshs, ceils = batch
+        samples = samples / 6000
+        examples = examples / ceils[:, None, None]
         gt_apps = gt_apps / ceils[:, None]
         loss = self(examples, samples, gt_apps)
         self.log('loss', loss, on_epoch=True, prog_bar=True, logger=True)
@@ -71,6 +72,8 @@ class NilmNet(L.LightningModule):
         # tags: (N, 3)
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
+        samples = samples / 6000
+        examples = examples / ceils[:, None, None]
         pred_apps = self(examples, samples) * ceils[:, None]
         pred_apps[pred_apps < 15] = 0
         self.y.extend([tensor for tensor in pred_apps])
@@ -92,6 +95,8 @@ class NilmNet(L.LightningModule):
     
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
+        samples = samples / 6000
+        examples = examples / ceils[:, None, None]
         pred_apps = self(examples, samples) * ceils[:, None]
         pred_apps[pred_apps < 15] = 0
         self.x.extend([tensor for tensor in examples])

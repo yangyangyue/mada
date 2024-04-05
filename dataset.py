@@ -120,8 +120,8 @@ class NilmDataset(Dataset):
         neg_idx = np.nonzero(np.any(self.apps < self.app_thresh, axis=1))[0]
         if len(pos_idx) < len(neg_idx):
             neg_idx = np.random.choice(neg_idx, len(pos_idx), replace=False)
-        self.samples = np.cat([self.samples[pos_idx], self.samples[neg_idx]])
-        self.apps = np.cat([self.apps[pos_idx], self.apps[neg_idx]])
+        self.samples = np.concatenate([self.samples[pos_idx], self.samples[neg_idx]])
+        self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
 
     def __len__(self):
         return len(self.samples)
