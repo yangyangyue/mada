@@ -11,7 +11,6 @@ import configparser
 
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
-from lightning.pytorch.tuner import Tuner
 import torch
 
 from lightning_module import NilmDataModule, NilmNet
@@ -23,24 +22,22 @@ def train(args, config):
     method, houses, app_abbs, tags =args.method, args.houses, args.apps, args.tags
     # model and data
     model = NilmNet(args.method, config)
-    data_module = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'))
+    data_module = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=64)
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
         dirpath='~/checkpoints/',
         filename=f'{method}{tags}-{houses}-{app_abbs}' + '-{epoch}',
         monitor="val_mae"
     )
-    # early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
+    early_stop_callback = EarlyStopping(monitor="val_mae", patience=20)
     # trainer
     trainer = pl.Trainer(
         devices="auto",
         accelerator="auto",
-        max_epochs=200,
-        callbacks=[checkpoint_callback],
+        max_epochs=100,
+        callbacks=[checkpoint_callback, early_stop_callback],
         log_every_n_steps=10
     )
-    tuner = Tuner(trainer)
-    tuner.scale_batch_size(model, datamodule=data_module)
     # do train and validation
     trainer.fit(model, datamodule=data_module)
 

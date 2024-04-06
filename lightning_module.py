@@ -62,7 +62,6 @@ class NilmNet(L.LightningModule):
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
         samples, gt_apps, examples, threshs, ceils = batch
-        gt_apps = gt_apps 
         loss = self(examples, samples, gt_apps)
         self.losses.append(loss.item())
         return loss
@@ -118,32 +117,32 @@ class NilmNet(L.LightningModule):
         print('test_mae', mae, 'test_mae_on', mae_on, 'test_mre_on', mre_on)
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
-        scheduler = {
-            "scheduler": self.exponential_scheduler(
-                optimizer,
-                200,
-                self.lr,
-                self.min_lr
-            ),
-            "name": "learning_rate",
-            "interval": "step",
-            "frequency": 1
-        }
-        return [optimizer], [scheduler]
+        return torch.optim.AdamW(self.parameters())
+        # scheduler = {
+        #     "scheduler": self.exponential_scheduler(
+        #         optimizer,
+        #         200,
+        #         self.lr,
+        #         self.min_lr
+        #     ),
+        #     "name": "learning_rate",
+        #     "interval": "step",
+        #     "frequency": 1
+        # }
+        # return [optimizer], [scheduler]
     
-    @staticmethod
-    def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
-        def lr_lambda(x):
-            if x > warmup_steps:
-                if lr * gamma ** (x - warmup_steps) > min_lr:
-                    return gamma ** (x - warmup_steps)
-                else:
-                    return min_lr / lr
-            else:
-                return x / warmup_steps
+    # @staticmethod
+    # def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
+    #     def lr_lambda(x):
+    #         if x > warmup_steps:
+    #             if lr * gamma ** (x - warmup_steps) > min_lr:
+    #                 return gamma ** (x - warmup_steps)
+    #             else:
+    #                 return min_lr / lr
+    #         else:
+    #             return x / warmup_steps
 
-        return LambdaLR(optimizer, lr_lambda=lr_lambda)
+    #     return LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
 def reconstruct(y):
@@ -159,7 +158,7 @@ def reconstruct(y):
     return out
 
 class NilmDataModule(L.LightningDataModule):
-    def __init__(self, houses, app_abbs, data_dir, batch_size=1):
+    def __init__(self, houses, app_abbs, data_dir, batch_size=64):
         super().__init__()
         self.houses = houses
         self.app_abbs = app_abbs

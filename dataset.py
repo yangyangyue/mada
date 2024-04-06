@@ -103,7 +103,7 @@ class NilmDataset(Dataset):
         else:
             self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.example = np.load(Path('examples') / f'{set_name}{house_id}-{app_abb}.npy')
+            self.example = np.load(Path('examples') / f'{set_name}{house_id}-{app_abb}.npy')[0]
             self.example = np.clip(self.example, 0, self.app_ceil)
         if stage != 'fit':
             return 

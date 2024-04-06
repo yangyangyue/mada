@@ -19,7 +19,7 @@ plt.rc("font", family="Times New Roman")
 
 WINDOW_LENGTH = 1024
 WINDOW_STRIDE = 256
-N = 3
+N = 1
 dir = Path("C:\\Users\\21975\Downloads\\nilm_lf")
 
 def get_example(data_dir, set_name, house_id, app_abb, channel, n):

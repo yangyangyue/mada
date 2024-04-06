@@ -22,7 +22,7 @@ def test(method, houses, app_abb, ckpt, config):
     save_path = Path('results') / f'{method}-{houses}-{app_abb}.csv'
     save_path.parent.mkdir(parents=True, exist_ok=True)
     model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config, save_path=save_path)
-    data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'))
+    data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'), batch_size=64)
     trainer = pl.Trainer(devices="auto", accelerator="auto")
     trainer.test(model, datamodule=data_module, verbose=False)
 
