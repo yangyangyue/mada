@@ -20,6 +20,7 @@ from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 from dataset import NilmDataset
 from models.aada import AadaNet
 from models.avae import AvaeNet
+from models.avae2t import Avae2tNet
 from models.vae import VaeNet
 
 WINDOW_SIZE = 1024
@@ -49,6 +50,8 @@ class NilmNet(L.LightningModule):
             self.model = VaeNet()
         elif net_name == 'avae':
             self.model = AvaeNet()
+        elif net_name == 'avae2t':
+            self.model = Avae2tNet()
         self.x = []
         self.y = []
         self.y_hat = []

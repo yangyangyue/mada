@@ -32,20 +32,6 @@ class UpNet(nn.Module):
         x = self.up(x)
         x = self.ibn(x)
         return x
-    
-class PositionEmbeddingSine(nn.Module):
-    def __init__(self, dropout=0.1):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, x):
-        channels, length = x.shape[1], x.shape[2]
-        pe = torch.zeros(length, channels) 
-        position = torch.arange(0, length)
-        div_term = torch.full([1, channels // 2], 10000).pow((torch.arange(0, channels, 2) / channels))
-        pe[:, 0::2] = torch.sin(position[:, None] / div_term)
-        pe[:, 1::2] = torch.cos(position[:, None] / div_term)
-        return self.dropout(pe.permute(1, 0).to(x.device))
 
 class Attention(nn.Module):
     def __init__(self, d_model, n_heads) -> None:
@@ -195,9 +181,8 @@ class Decoder(nn.Module):
 class AadaNet(nn.Module):
     def __init__(self, self_attention, channels, n_heads, dropout, mid_channels, use_ins, n_layers, variation, window_size=1024) -> None:
         super().__init__()
-        self.ibn_tokenizer1 = IbnNet(2, mid_channels, channels)
+        self.ibn_tokenizer1 = IbnNet(1, mid_channels, channels)
         self.ibn_tokenizer2 = IbnNet(1, mid_channels, channels)
-        self.pe = PositionEmbeddingSine()
         self.ibn_encoder = IbnNet(channels, mid_channels, channels)
         self.ibn_decoder = IbnNet(1, mid_channels, channels)
         self.variation = variation

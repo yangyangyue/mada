@@ -44,12 +44,38 @@ python train.py --method aada --ckpt aada-u15-kmdwf-epoch=87
 ```
 
 ## 性能
-考虑所有5个设备，以ukdale的house_1, house_5为训练集，以ukdale house_2为测试集，结果如下：
 
+
+avae refit256->ukdale2 
 | 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
 | :----: | :----: | :----: | :----: | :----: | :----: |
-| mae | 6.79 | 6.85 | 24.12 | 4.75 | 16.62 |
-| mae_on | 645.22 | 1259.93 | 784.48 | 361.92 | 19.14 |
+| mae | 8.69 | 4.53 | 25.82 | 4.61 | 17.27 |
+| mae_on | 778.59 | 782.85 | 806.88 | 277.04 | 19.92 |
+| mre_on | 0.26 | 0.62 | 0.68 | 0.68 | 0.22 |
+
+avae ukdale15->ukdale2 
+| 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
+| :----: | :----: | :----: | :----: | :----: | :----: |
+| mae | 7.03 | 8.29 | 11.37 | 7.84 | 27.37 |
+| mae_on | 661.77 | 828.77 | 332.01 | 462.37 | 43.99 |
+| mre_on | 0.22 | 0.64 | 0.47 | 0.77 | 0.49 |
+
+vae refit256->ukdale2 
+| 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
+| :----: | :----: | :----: | :----: | :----: | :----: |
+| mae | 5.98 | 3.91 | 16.35 | 9.72 | 21.76 |
+| mae_on | 526.53 | 655.74 | 507.27 | 252.19 | 31.95 |
+| mre_on | 0.17 | 0.52 | 0.53 | 0.73 | 0.35 |
+
+
+vae ukdale15->ukdale2 
+| 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
+| :----: | :----: | :----: | :----: | :----: | :----: |
+| mae | 7.41 | 5.65 | 11.17 | 3.83 | 15.45 |
+| mae_on | 706.32 | 957.19 | 341.46 | 278.48 | 15.04 |
+| mre_on | 0.23 | 0.75 | 0.51 | 0.77 | 0.16 |
+
+
 
 ## 部署
 本项目基于fastapi搭建web服务(http://127.0.0.1:8080/predict/)，对外提供调用模型的接口，具体逻辑见app.py。部署命令如下：
