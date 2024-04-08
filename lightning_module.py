@@ -19,6 +19,7 @@ from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 
 from dataset import NilmDataset
 from models.aada import AadaNet
+from models.acvae import AcvaeNet
 from models.avae import AvaeNet
 from models.avae2t import Avae2tNet
 from models.vae import VaeNet
@@ -52,6 +53,8 @@ class NilmNet(L.LightningModule):
             self.model = AvaeNet()
         elif net_name == 'avae2t':
             self.model = Avae2tNet()
+        elif net_name == 'acave':
+            self.model = AcvaeNet()
         self.x = []
         self.y = []
         self.y_hat = []
@@ -77,7 +80,7 @@ class NilmNet(L.LightningModule):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(examples, samples)
-        pred_apps[pred_apps < 15] = 0
+        pred_apps[pred_apps < threshs[:, None]] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
         self.thresh.extend([thresh for thresh in threshs])
@@ -97,7 +100,7 @@ class NilmNet(L.LightningModule):
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(examples, samples)
-        pred_apps[pred_apps < 15] = 0
+        pred_apps[pred_apps < threshs[:, None]] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])

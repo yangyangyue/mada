@@ -53,19 +53,19 @@ avae refit256->ukdale2
 | mae_on | 778.59 | 782.85 | 806.88 | 277.04 | 19.92 |
 | mre_on | 0.26 | 0.62 | 0.68 | 0.68 | 0.22 |
 
-avae ukdale15->ukdale2 
-| 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
-| :----: | :----: | :----: | :----: | :----: | :----: |
-| mae | 7.03 | 8.29 | 11.37 | 7.84 | 27.37 |
-| mae_on | 661.77 | 828.77 | 332.01 | 462.37 | 43.99 |
-| mre_on | 0.22 | 0.64 | 0.47 | 0.77 | 0.49 |
-
 vae refit256->ukdale2 
 | 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
 | :----: | :----: | :----: | :----: | :----: | :----: |
 | mae | 5.98 | 3.91 | 16.35 | 9.72 | 21.76 |
 | mae_on | 526.53 | 655.74 | 507.27 | 252.19 | 31.95 |
 | mre_on | 0.17 | 0.52 | 0.53 | 0.73 | 0.35 |
+
+avae ukdale15->ukdale2 
+| 指标 | Kettle | Microwave| Dishwasher | Washing_meachine | Fridge |
+| :----: | :----: | :----: | :----: | :----: | :----: |
+| mae | 7.03 | 8.29 | 11.37 | 7.84 | 27.37 |
+| mae_on | 661.77 | 828.77 | 332.01 | 462.37 | 43.99 |
+| mre_on | 0.22 | 0.64 | 0.47 | 0.77 | 0.49 |
 
 
 vae ukdale15->ukdale2 

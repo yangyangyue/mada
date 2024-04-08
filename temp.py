@@ -1,7 +1,14 @@
+from matplotlib import pyplot as plt
 import pandas as pd
+import numpy as np
+x =np.loadtxt('results/')
+plt.figure()
+plt.plot(x[0, :])
+plt.plot(x[1: ])
+plt.plot(x[2:, ])
+plt.show()
 
 
-df = pd.read_csv('C:\\Users\\21975\\Downloads\\nilm_lf\\refit\\CLEAN_House1.csv')
 # from sconf import Config
 # import numpy as np
 # import matplotlib.pyplot as plt
