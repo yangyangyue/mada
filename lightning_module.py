@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor,as_completed
 from pathlib import Path
 import random
 import re
+import sys
 
 import lightning as L
 import numpy as np
@@ -31,7 +32,6 @@ WINDOW_STRIDE = 256
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, config, save_path = None) -> None:
         super().__init__()
-        self.batch_size = None
         self.lr = config.getfloat('default', 'lr')
         self.min_lr = config.getfloat('default', 'min_lr')
         self.save_path = save_path
@@ -80,7 +80,7 @@ class NilmNet(L.LightningModule):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(examples, samples)
-        pred_apps[pred_apps < threshs[:, None]] = 0
+        pred_apps[pred_apps < 15] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
         self.thresh.extend([thresh for thresh in threshs])
@@ -100,7 +100,7 @@ class NilmNet(L.LightningModule):
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(examples, samples)
-        pred_apps[pred_apps < threshs[:, None]] = 0
+        pred_apps[pred_apps < 15] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
@@ -120,35 +120,16 @@ class NilmNet(L.LightningModule):
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
-        print('test_mae', mae, 'test_mae_on', mae_on, 'test_mre_on', mre_on)
+        self.print2file('test_mae', mae, 'test_mae_on', mae_on, 'test_mre_on', mre_on)
     
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters())
-        # scheduler = {
-        #     "scheduler": self.exponential_scheduler(
-        #         optimizer,
-        #         200,
-        #         self.lr,
-        #         self.min_lr
-        #     ),
-        #     "name": "learning_rate",
-        #     "interval": "step",
-        #     "frequency": 1
-        # }
-        # return [optimizer], [scheduler]
-    
-    # @staticmethod
-    # def exponential_scheduler(optimizer, warmup_steps, lr, min_lr=1e-5, gamma=0.9999):
-    #     def lr_lambda(x):
-    #         if x > warmup_steps:
-    #             if lr * gamma ** (x - warmup_steps) > min_lr:
-    #                 return gamma ** (x - warmup_steps)
-    #             else:
-    #                 return min_lr / lr
-    #         else:
-    #             return x / warmup_steps
 
-    #     return LambdaLR(optimizer, lr_lambda=lr_lambda)
+    def print2file(self, *args):
+        with open(f'{self.save_path.stem}.log', 'a') as f:
+            sys.stdout = f
+            print(*args)
+            sys.stdout = sys.__stdout__  
 
 
 def reconstruct(y):
@@ -178,16 +159,14 @@ class NilmDataModule(L.LightningDataModule):
             set_name, house_ids = match.groups()
             self.test_set = NilmDataset(Path(self.data_dir), set_name, int(house_ids), self.app_abbs, stage)
             return
-        with ThreadPoolExecutor(16) as executor:
-            future_map = {}
-            for app_abb in self.app_abbs:
-                future_map[app_abb] = []
-                for houses_in_set in self.houses.split('-'):
-                    match = re.match(r'^(\D+)(\d+)$', houses_in_set)
-                    set_name, house_ids = match.groups()
-                    future_map[app_abb] += [executor.submit(NilmDataset, Path(self.data_dir), set_name, int(house_id), app_abb, stage) for house_id in house_ids]
-        # get NilmDatasets of each appliance
-        datasets = [ConcatDataset([future.result() for future in as_completed(future_map[app_abb])]) for app_abb in self.app_abbs]
+        datasets = []
+        for app_abb in self.app_abbs:
+            app_datasets =[]
+            for houses_in_set in self.houses.split('-'):
+                match = re.match(r'^(\D+)(\d+)$', houses_in_set)
+                set_name, house_ids = match.groups()
+                app_datasets.extend([NilmDataset(Path(self.data_dir), set_name, int(house_id), app_abb, stage) for house_id in house_ids])
+            datasets.append(ConcatDataset(app_datasets))
         # balance the number of samples of diiferent appliances
         min_length = min(len(dataset) for dataset in datasets)
         max_length = int(min_length * 1.5)
@@ -199,7 +178,7 @@ class NilmDataModule(L.LightningDataModule):
             else:
                 balanced_dataset = dataset
             balanced_datasets.append(balanced_dataset)
-        dataset = ConcatDataset(datasets)
+        dataset = ConcatDataset(balanced_datasets)
         self.train_set, self.val_set = random_split(dataset, [0.8, 0.2])
             
 

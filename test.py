@@ -8,6 +8,7 @@ email: lily231147@gmail.com
 
 import argparse
 import configparser
+import glob
 from pathlib import Path
 
 import lightning.pytorch as pl
@@ -21,7 +22,8 @@ def test(method, houses, app_abb, ckpt, config):
     torch.set_float32_matmul_precision('high')
     save_path = Path('results') / f'{method}-{houses}-{app_abb}.csv'
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    model = NilmNet.load_from_checkpoint(f'~/checkpoints/{ckpt}.ckpt', net_name=method, config=config, save_path=save_path)
+    ckpt_files = list(Path('~/checkpoints').expanduser().glob(f'{ckpt}*'))
+    model = NilmNet.load_from_checkpoint(ckpt_files[0], net_name=method, config=config, save_path=save_path)
     data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'), batch_size=64)
     trainer = pl.Trainer(devices="auto", accelerator="auto")
     trainer.test(model, datamodule=data_module, verbose=False)
