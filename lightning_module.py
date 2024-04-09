@@ -6,7 +6,6 @@ written by lily
 email: lily231147@gmail.com
 """
 
-from concurrent.futures import ThreadPoolExecutor,as_completed
 from pathlib import Path
 import random
 import re
@@ -15,7 +14,7 @@ import sys
 import lightning as L
 import numpy as np
 import torch
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 
 from dataset import NilmDataset
@@ -120,15 +119,17 @@ class NilmNet(L.LightningModule):
         self.y.clear()
         self.y_hat.clear()
         self.thresh.clear()
-        self.print2file('test_mae', mae, 'test_mae_on', mae_on, 'test_mre_on', mre_on)
+        self.print2file('test_mae', mae.item(), 'test_mae_on', mae_on.item(), 'test_mre_on', mre_on.item())
     
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters())
+        optimizer = torch.optim.AdamW(self.parameters())
+        scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
+        return [optimizer], [scheduler]
 
     def print2file(self, *args):
-        with open(f'{self.save_path.stem}.log', 'a') as f:
+        with open('test_results.log', 'a') as f:
             sys.stdout = f
-            print(*args)
+            print(self.save_path.stem, *args)
             sys.stdout = sys.__stdout__  
 
 
