@@ -36,6 +36,7 @@ def train(args, config):
         accelerator="auto",
         max_epochs=100,
         callbacks=[checkpoint_callback, early_stop_callback],
+        deterministic=True,
         log_every_n_steps=10
     )
     # do train and validation

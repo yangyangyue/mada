@@ -9,47 +9,48 @@ email: lily231147@gmail.com
 import torch
 from torch import nn
 
-from models.ibn import IbnNet
+from models.common import IbnNet
 
-class AvaeNet(nn.Module):
-    def __init__(self, mid_channels=64, out_channels=256, window_size=1024):
+
+class AvanNet(nn.Module):
+    def __init__(self, channels=256, window_size=1024):
         super().__init__()
 
         # encoder
-        self.layer1_0 = IbnNet(1+1, mid_channels, out_channels)
+        self.layer1_0 = IbnNet(1+1, channels, use_ins=True)
         self.layer1_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer2_0 = IbnNet(out_channels, mid_channels, out_channels)
+        self.layer2_0 = IbnNet(channels, channels, use_ins=True)
         self.layer2_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer3_0 = IbnNet(out_channels, mid_channels, out_channels)
+        self.layer3_0 = IbnNet(channels, channels,use_ins=True)
         self.layer3_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer4_0 = IbnNet(out_channels, mid_channels, out_channels)
+        self.layer4_0 = IbnNet(channels, channels, use_ins=True)
         self.layer4_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer5_0 = IbnNet(out_channels, mid_channels, out_channels)
+        self.layer5_0 = IbnNet(channels, channels,use_ins=True)
         self.layer5_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer6_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
+        self.layer6_0 = IbnNet(channels, channels)
         self.layer6_1 = nn.MaxPool1d(kernel_size=2)
-        self.layer7_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
+        self.layer7_0 = IbnNet(channels, channels)
 
         # mid
         length = window_size // (1 << 6)
-        self.z_mu = nn.Linear(out_channels * length, length)
-        self.z_log_var = nn.Linear(out_channels * length, length)
+        self.z_mu = nn.Linear(channels * length, length)
+        self.z_log_var = nn.Linear(channels * length, length)
 
         # decoder
-        self.layer8_0 = IbnNet(1, mid_channels, out_channels, use_ins=False)
-        self.layer8_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer9_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer9_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer10_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer10_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer11_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer11_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer12_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer12_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer13_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer13_1 = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        self.layer14_0 = IbnNet(out_channels, mid_channels, out_channels, use_ins=False)
-        self.layer14_1 = nn.Conv1d(2 * out_channels, 1, kernel_size=3, stride=1, padding=1)
+        self.layer8_0 = IbnNet(1, channels, use_ins=False)
+        self.layer8_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer9_0 = IbnNet(channels, channels)
+        self.layer9_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer10_0 = IbnNet(channels, channels)
+        self.layer10_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer11_0 = IbnNet(channels, channels)
+        self.layer11_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer12_0 = IbnNet(channels, channels)
+        self.layer12_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer13_0 = IbnNet(channels, channels)
+        self.layer13_1 = nn.ConvTranspose1d(2 * channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.layer14_0 = IbnNet(channels, channels)
+        self.layer14_1 = nn.Conv1d(2 * channels, 1, kernel_size=3, stride=1, padding=1)
 
     @staticmethod
     def __loss(apps, apps_pred, z_mu, z_log_var):
@@ -60,11 +61,10 @@ class AvaeNet(nn.Module):
     def forward(self, examples, aggs, apps=None):
         """
         Args:
-            examples: (N, L)
             aggs: (N, L)
         """
         # encoder
-        x = torch.cat([aggs[:, None, :], examples[:, None, :]], dim=1)
+        x = torch.stack([examples, aggs], dim=1)
         x10 = self.layer1_0(x)
         x11 = self.layer1_1(x10)
         x20 = self.layer2_0(x11)

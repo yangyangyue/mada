@@ -51,19 +51,20 @@ def get_example(data_dir, set_name, house_id, app_abb, channel, n):
     assert len(examples) == n
     return examples
 
+get_example(dir, 'ukdale', 1, 'k', 10, N )
 
-if __name__ == '__main__':
-    for app_abb, house_channels in dataset.ukdale_channels.items():
-        for house_id, channels in house_channels.items():
-            examples = []
-            for i, channel in enumerate(channels):
-                examples.extend(get_example(dir, 'ukdale', house_id, app_abb, channel, (N+i) // len(channels)))
-            np.save(Path('examples') / f'ukdale{house_id}-{app_abb}.npy', np.stack(examples))
-    for app_abb, house_channels in dataset.refit_channels.items():
-        for house_id, channels in house_channels.items():
-            examples = []
-            for i, channel in enumerate(channels):
-                examples.extend(get_example(dir, 'refit', house_id, app_abb, channel, (N+i) // len(channels)))
-            np.save(Path('examples') / f'refit{house_id}-{app_abb}.npy', np.stack(examples))
+# if __name__ == '__main__':
+#     for app_abb, house_channels in dataset.ukdale_channels.items():
+#         for house_id, channels in house_channels.items():
+#             examples = []
+#             for i, channel in enumerate(channels):
+#                 examples.extend(get_example(dir, 'ukdale', house_id, app_abb, channel, (N+i) // len(channels)))
+#             np.save(Path('examples') / f'ukdale{house_id}-{app_abb}.npy', np.stack(examples))
+#     for app_abb, house_channels in dataset.refit_channels.items():
+#         for house_id, channels in house_channels.items():
+#             examples = []
+#             for i, channel in enumerate(channels):
+#                 examples.extend(get_example(dir, 'refit', house_id, app_abb, channel, (N+i) // len(channels)))
+#             np.save(Path('examples') / f'refit{house_id}-{app_abb}.npy', np.stack(examples))
 
 

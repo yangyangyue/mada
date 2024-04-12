@@ -25,7 +25,7 @@ def test(method, houses, app_abb, ckpt, config):
     ckpt_files = list(Path('~/checkpoints').expanduser().glob(f'{ckpt}*'))
     model = NilmNet.load_from_checkpoint(ckpt_files[0], net_name=method, config=config, save_path=save_path)
     data_module = NilmDataModule(houses, app_abb, config.get('default', 'data_dir'), batch_size=64)
-    trainer = pl.Trainer(devices="auto", accelerator="auto")
+    trainer = pl.Trainer(devices="auto", accelerator="auto", deterministic=True)
     trainer.test(model, datamodule=data_module, verbose=False)
 
 
