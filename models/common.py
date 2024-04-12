@@ -44,7 +44,7 @@ class ExampleEncoder(nn.Module):
         self.lstm = nn.LSTM(1, out_channels // 2, batch_first=True, bidirectional=True)
 
     def forward(self, x):
-        output, (hn, cn) = self.lstm(x[:, :, None])
+        output, (hn, cn) = self.lstm(x)
         return output[:, -1, :]
     
 class Attention(nn.Module):

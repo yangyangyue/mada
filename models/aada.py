@@ -28,7 +28,7 @@ class UpNet(nn.Module):
         super().__init__()
         self.ibn = IbnNet(in_channels, out_channels)
         self.attention = Attention(out_channels)
-        self.up = nn.ConvTranspose1d(in_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up = nn.ConvTranspose1d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
         
 
     def forward(self, y, x):
@@ -68,7 +68,7 @@ class AadaNet(nn.Module):
         self.encoder = Encoder(channels, n_layers)
         self.combine = Attention()
         self.decoder = Decoder(channels, n_layers)
-        self.linear = nn.Linear(channels, window_size // 2 << n_layers)
+        self.linear = nn.Linear(channels, window_size // (1 << n_layers))
         self.make_out = nn.Conv1d(channels, 1, kernel_size=3, stride=1, padding=1)
         
         
@@ -79,9 +79,8 @@ class AadaNet(nn.Module):
             examples (N, 3, L): input examples
             samples (N, L): input samples
         """
-        xs = self.encoder(x[:, None, :])
-        z 
-        x_example = self.example_encoder(examples[:, None, :])
+        xs = self.encoder(x[:, None, :]) # xs: [(N, C, L)] * n_layers
+        x_example = self.example_encoder(examples[:, :, None])
         # combine
         z = self.combine(x_example[:, :, None], xs[-1], xs[-1])
         z = z.flatten(start_dim=1)
@@ -89,7 +88,7 @@ class AadaNet(nn.Module):
         # decode
         y = self.decoder(z[:, None, :], reversed(xs))
         y = self.make_out(y)
-        y = torch.relu(y).unsqueeze(1)
+        y = torch.relu(y).squeeze(1)
         if self.training:
             return ((gt_apps - y)**2).mean()
         else:

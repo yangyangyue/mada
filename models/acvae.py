@@ -9,15 +9,16 @@ email: lily231147@gmail.com
 import torch
 from torch import nn
 
-from models.common import IbnNet
+from models.common import Attention, ExampleEncoder, IbnNet
 
 
-class AvaeNet(nn.Module):
+class VaeNet(nn.Module):
     def __init__(self, channels=256, window_size=1024):
         super().__init__()
-
+        self.example_encoder = ExampleEncoder(channels)
+        self.combine = Attention()
         # encoder
-        self.layer1_0 = IbnNet(1+1, channels, use_ins=True)
+        self.layer1_0 = IbnNet(1, channels, use_ins=True)
         self.layer1_1 = nn.MaxPool1d(kernel_size=2)
         self.layer2_0 = IbnNet(channels, channels, use_ins=True)
         self.layer2_1 = nn.MaxPool1d(kernel_size=2)
@@ -33,8 +34,8 @@ class AvaeNet(nn.Module):
 
         # mid
         length = window_size // (1 << 6)
-        self.z_mu = nn.Linear(channels * length, length)
-        self.z_log_var = nn.Linear(channels * length, length)
+        self.z_mu = nn.Linear(channels, length)
+        self.z_log_var = nn.Linear(channels, length)
 
         # decoder
         self.layer8_0 = IbnNet(1, channels, use_ins=False)
@@ -63,9 +64,9 @@ class AvaeNet(nn.Module):
         Args:
             aggs: (N, L)
         """
+        x_example = self.example_encoder(examples[:, :, None])
         # encoder
-        x = torch.stack([examples, aggs], dim=1)
-        x10 = self.layer1_0(x)
+        x10 = self.layer1_0(aggs[:, None, :])
         x11 = self.layer1_1(x10)
         x20 = self.layer2_0(x11)
         x21 = self.layer2_1(x20)
@@ -78,6 +79,8 @@ class AvaeNet(nn.Module):
         x60 = self.layer6_0(x51)
         x61 = self.layer6_1(x60)
         x70 = self.layer7_0(x61)  # (bs, 256, L//64=16)
+
+        z = self.combine(x_example[:, :, None], x70, x70)
 
         xflatten = x70.flatten(start_dim=1)
         mu = self.z_mu(xflatten)
