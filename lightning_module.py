@@ -22,6 +22,7 @@ from models.aada import AadaNet
 from models.acvae import AcvaeNet
 from models.avae import AvaeNet
 from models.vae import VaeNet
+from models.unet3 import VAE_method_3_
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
@@ -42,6 +43,8 @@ class NilmNet(L.LightningModule):
             self.model = AvaeNet()
         elif net_name == 'acvae':
             self.model =  AcvaeNet()
+        elif net_name == 'unet':
+            self.model = VAE_method_3_()
         self.x = []
         self.y = []
         self.y_hat = []

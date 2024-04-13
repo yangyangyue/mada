@@ -12,7 +12,7 @@ from torch import nn
 from models.common import Attention, ExampleEncoder, IbnNet
 
 
-class VaeNet(nn.Module):
+class AcvaeNet(nn.Module):
     def __init__(self, channels=256, window_size=1024):
         super().__init__()
         self.example_encoder = ExampleEncoder(channels)
@@ -82,7 +82,7 @@ class VaeNet(nn.Module):
 
         z = self.combine(x_example[:, :, None], x70, x70)
 
-        xflatten = x70.flatten(start_dim=1)
+        xflatten = z.flatten(start_dim=1)
         mu = self.z_mu(xflatten)
         logvar = self.z_log_var(xflatten)
         std = torch.exp(0.5 * logvar)
