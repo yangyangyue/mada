@@ -54,3 +54,5 @@ python train.py --method acvae --houses refit256 --apps kdwf
 python train.py --method acvae --houses refit256 --apps kmwf
 python train.py --method acvae --houses refit256 --apps kmdf
 python train.py --method acvae --houses refit256 --apps kmdw
+
+

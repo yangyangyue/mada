@@ -22,7 +22,7 @@ from models.aada import AadaNet
 from models.acvae import AcvaeNet
 from models.avae import AvaeNet
 from models.vae import VaeNet
-from models.unet3 import VAE_method_3_
+from models.unet import VAE_method_3_
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
@@ -113,7 +113,7 @@ class NilmNet(L.LightningModule):
         self.print2file('test_mae', mae.item(), 'test_mae_on', mae_on.item(), 'test_mre_on', mre_on.item())
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters())
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
         scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
         return [optimizer], [scheduler]
 

@@ -157,8 +157,9 @@ class VAE_method_3_(nn.Module):  # 相比VAE_method_3网络层数降低
         self.last_conv = nn.Conv1d(in_channels=self.outchannel * 5, out_channels=1, kernel_size=3, stride=1, padding=1)
         self.relu_layer = nn.ReLU()
 
-    def forward(self, x, apps=None):
+    def forward(self, _, x, apps=None):
         # encorder
+        x= x[:, None, :]
         x10 = self.layer1_0(x)
         x11 = self.layer1_1(x10)
         x20 = self.layer2_0(x11)

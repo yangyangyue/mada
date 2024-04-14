@@ -19,14 +19,14 @@ def train(args, config):
     # init
     pl.seed_everything(42, workers=True)
     torch.set_float32_matmul_precision('high')
-    method, houses, app_abbs, tags =args.method, args.houses, args.apps, args.tags
+    method, houses, app_abbs =args.method, args.houses, args.apps
     # model and data
     model = NilmNet(args.method, config)
-    data_module = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=64)
+    datamodule = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=32)
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
         dirpath='~/checkpoints/',
-        filename=f'{method}{tags}-{houses}-{app_abbs}' + '-{epoch}',
+        filename=f'{method}-{houses}-{app_abbs}' + '-{epoch}',
         monitor="val_mae"
     )
     early_stop_callback = EarlyStopping(monitor="val_mae", patience=20)
@@ -36,11 +36,10 @@ def train(args, config):
         accelerator="auto",
         max_epochs=100,
         callbacks=[checkpoint_callback, early_stop_callback],
-        deterministic=True,
         log_every_n_steps=10
     )
     # do train and validation
-    trainer.fit(model, datamodule=data_module)
+    trainer.fit(model, datamodule=datamodule)
 
 
 if __name__ == "__main__":
@@ -49,7 +48,6 @@ if __name__ == "__main__":
     parser.add_argument('--method', type=str, default='aada')
     parser.add_argument('--houses', type=str, default='ukdale15')
     parser.add_argument('--apps', type=str, default='k')
-    parser.add_argument('--tags', type=str, default='')
     args = parser.parse_args()
     # config
     config = configparser.ConfigParser()
