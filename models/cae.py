@@ -61,7 +61,7 @@ class Decoder(nn.Module):
             y = layer(y, x)
         return y
     
-class AadaNet(nn.Module):
+class CaeNet(nn.Module):
     def __init__(self, channels, n_layers, window_size=1024) -> None:
         super().__init__()
         self.example_encoder = ExampleEncoder(channels)

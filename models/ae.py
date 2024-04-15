@@ -27,14 +27,12 @@ class UpNet(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.ibn = IbnNet(in_channels, out_channels)
-        self.attention = Attention(out_channels)
-        self.up = nn.ConvTranspose1d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up = nn.ConvTranspose1d(2 * out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
         
 
     def forward(self, y, x):
         y = self.ibn(y)
-        y = y + self.attention(y, x, x)
-        y = self.up(y)
+        y = self.up(torch.concat([y, x], dim=1))
         return y
 
 class Encoder(nn.Module):
@@ -50,6 +48,7 @@ class Encoder(nn.Module):
         return xs
 
 
+
 class Decoder(nn.Module):
     def __init__(self, channels, n_layers) -> None:
         super().__init__()
@@ -60,29 +59,28 @@ class Decoder(nn.Module):
             y = layer(y, x)
         return y
     
-class AadaNet(nn.Module):
+class AeNet(nn.Module):
     def __init__(self, channels, n_layers, window_size=1024) -> None:
         super().__init__()
         self.example_encoder = ExampleEncoder(channels)
         self.encoder = Encoder(channels, n_layers)
         self.combine = Attention()
         self.decoder = Decoder(channels, n_layers)
-        self.linear = nn.Linear(channels, window_size // (1 << n_layers))
+        feature_length = window_size // (1 << n_layers)
+        self.linear = nn.Linear(channels * feature_length, feature_length)
         self.make_out = nn.Conv1d(channels, 1, kernel_size=3, stride=1, padding=1)
         
         
 
-    def forward(self, examples, x, gt_apps=None):
+    def forward(self, _, x, gt_apps=None):
         """
         Args:
             examples (N, 3, L): input examples
             samples (N, L): input samples
         """
         xs = self.encoder(x[:, None, :]) # xs: [(N, C, L)] * n_layers
-        x_example = self.example_encoder(examples[:, :, None])
         # combine
-        z = self.combine(x_example[:, :, None], xs[-1], xs[-1])
-        z = z.flatten(start_dim=1)
+        z = xs[-1].flatten(start_dim=1)
         z = self.linear(z)
         # decode
         y = self.decoder(z[:, None, :], reversed(xs))
