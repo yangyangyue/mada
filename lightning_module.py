@@ -21,6 +21,7 @@ from dataset import NilmDataset
 from models.aada import AadaNet
 from models.acvae import AcvaeNet
 from models.ae import AeNet
+from models.apt import AptNet
 from models.avae import AvaeNet
 from models.cae import CaeNet
 from models.pt import PtNet
@@ -54,6 +55,8 @@ class NilmNet(L.LightningModule):
             self.model = AeNet()
         elif net_name == 'pt':
             self.model = PtNet()
+        elif net_name == 'apt':
+            self.model = AptNet()
         self.x = []
         self.y = []
         self.y_hat = []

@@ -21,22 +21,24 @@ def pe(q_len, d_model, normalize=True):
         pe = pe / (pe.std() * 10)
     return pe
     
-class PtNet(nn.Module):
+class AptNet(nn.Module):
     def __init__(self, channels=256, n_layers=2, window_size=1024) -> None:
         super().__init__()
         self.tokenlizer = nn.Linear(16, channels)
         encoder_layer = nn.TransformerEncoderLayer(channels, 8, 1048, batch_first=True)
         norm = nn.Sequential(nn.Transpose(1,2), nn.BatchNorm1d(channels), nn.Transpose(1,2))
         self.encoder = nn.TransformerEncoder(encoder_layer, n_layers, norm)
-        self.linear = nn.Linear(channels * window_size // 16, window_size)
+        self.linear = nn.Linear(2 * channels * window_size // 16, window_size)
 
-    def forward(self, _, x: Tensor, gt_apps:Tensor=None):
+    def forward(self, e: Tensor, x: Tensor, gt_apps:Tensor=None):
         """
         Args:
             examples (N, 3, L): input examples
             samples (N, L): input samples
         """
         x = x.unfold(dimension=-1, size=16, step=16)
+        e = e.unfold(dimension=-1, size=16, step=16)
+        x = torch.cat([x, e], dim=1)
         x = self.tokenlizer(x)
         x = x + pe(x.shape[1], x.shape[2])
         x = self.encoder(x)
