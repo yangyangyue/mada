@@ -10,6 +10,11 @@ import math
 import torch
 from torch import Tensor, nn
 
+from models.transformer import TransformerEncoder
+
+
+
+
 def pe(q_len, d_model, normalize=True):
     pe = torch.zeros(q_len, d_model)
     position = torch.arange(0, q_len).unsqueeze(1)
@@ -22,13 +27,12 @@ def pe(q_len, d_model, normalize=True):
     return pe
     
 class PtNet(nn.Module):
-    def __init__(self, channels=256, n_layers=2, window_size=1024) -> None:
+    def __init__(self, channels=256, n_layers=4, window_size=1024) -> None:
         super().__init__()
         self.tokenlizer = nn.Linear(16, channels)
-        encoder_layer = nn.TransformerEncoderLayer(channels, 8, 1048, batch_first=True)
-        norm = nn.Sequential(nn.Transpose(1,2), nn.BatchNorm1d(channels), nn.Transpose(1,2))
-        self.encoder = nn.TransformerEncoder(encoder_layer, n_layers, norm)
-        self.linear = nn.Linear(channels * window_size // 16, window_size)
+        self.encoder = TransformerEncoder(n_layers)
+        self.detokenlizer = nn.Linear(channels, 16)
+        self.linear = nn.Linear(window_size, window_size)
 
     def forward(self, _, x: Tensor, gt_apps:Tensor=None):
         """
@@ -38,8 +42,9 @@ class PtNet(nn.Module):
         """
         x = x.unfold(dimension=-1, size=16, step=16)
         x = self.tokenlizer(x)
-        x = x + pe(x.shape[1], x.shape[2])
+        x = x + pe(x.shape[1], x.shape[2]).to(x.device)
         x = self.encoder(x)
+        x = self.detokenlizer(x)
         x = x.flatten(start_dim=1)
         x = self.linear(x)
         y = x.relu()

@@ -5,10 +5,22 @@ Copyright (c) 2024-present lily.
 written by lily
 email: lily231147@gmail.com
 """
+"""
+MIT License
+Copyright (c) 2024-present lily.
+
+written by lily
+email: lily231147@gmail.com
+"""
 
 import math
 import torch
 from torch import Tensor, nn
+
+from models.transformer import TransformerEncoder
+
+
+
 
 def pe(q_len, d_model, normalize=True):
     pe = torch.zeros(q_len, d_model)
@@ -22,15 +34,14 @@ def pe(q_len, d_model, normalize=True):
     return pe
     
 class AptNet(nn.Module):
-    def __init__(self, channels=256, n_layers=2, window_size=1024) -> None:
+    def __init__(self, channels=256, n_layers=4, window_size=1024) -> None:
         super().__init__()
         self.tokenlizer = nn.Linear(16, channels)
-        encoder_layer = nn.TransformerEncoderLayer(channels, 8, 1048, batch_first=True)
-        norm = nn.Sequential(nn.Transpose(1,2), nn.BatchNorm1d(channels), nn.Transpose(1,2))
-        self.encoder = nn.TransformerEncoder(encoder_layer, n_layers, norm)
-        self.linear = nn.Linear(2 * channels * window_size // 16, window_size)
+        self.encoder = TransformerEncoder(n_layers)
+        self.detokenlizer = nn.Linear(channels, 16)
+        self.linear = nn.Linear(2 * window_size, window_size)
 
-    def forward(self, e: Tensor, x: Tensor, gt_apps:Tensor=None):
+    def forward(self, e, x: Tensor, gt_apps:Tensor=None):
         """
         Args:
             examples (N, 3, L): input examples
@@ -40,8 +51,9 @@ class AptNet(nn.Module):
         e = e.unfold(dimension=-1, size=16, step=16)
         x = torch.cat([x, e], dim=1)
         x = self.tokenlizer(x)
-        x = x + pe(x.shape[1], x.shape[2])
+        x = x + pe(x.shape[1], x.shape[2]).to(x.device)
         x = self.encoder(x)
+        x = self.detokenlizer(x)
         x = x.flatten(start_dim=1)
         x = self.linear(x)
         y = x.relu()
@@ -49,4 +61,3 @@ class AptNet(nn.Module):
             return ((gt_apps - y)**2).mean()
         else:
             return y
-
