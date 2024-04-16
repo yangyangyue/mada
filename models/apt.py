@@ -17,10 +17,7 @@ import math
 import torch
 from torch import Tensor, nn
 
-from models.transformer import TransformerEncoder
-
-
-
+from models.common import TransformerEncoder
 
 def pe(q_len, d_model, normalize=True):
     pe = torch.zeros(q_len, d_model)

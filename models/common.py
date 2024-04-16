@@ -47,22 +47,66 @@ class ExampleEncoder(nn.Module):
         output, (hn, cn) = self.lstm(x)
         return output[:, -1, :]
     
-class Attention(nn.Module):
-    def __init__(self, channels=None) -> None:
+class Transpose(nn.Module):
+    def __init__(self): 
         super().__init__()
-        self.channels = channels
-        if self.channels:
-            self.qc = nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1)
-            self.kc = nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1)
-            self.vc = nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1)
+    def forward(self, x):
+        return x.transpose(1, 2)
 
-    def forward(self, q, k, v):
-        d_model = q.shape[1]
-        if self.channels:
-            q = self.qc(q)
-            k = self.kc(k)
-            v = self.vc(v)
-        atten = torch.einsum('ndq,ndk->nqk', q, k)
-        atten = atten / (d_model ** 0.5)
+class Attention(nn.Module):
+    def __init__(self, d_model, n_heads) -> None:
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_head = d_model // n_heads
+
+        self.wq = nn.Linear(d_model, d_model, bias=False)
+        self.wk = nn.Linear(d_model, d_model, bias=False)
+        self.wv = nn.Linear(d_model, d_model, bias=False)
+        self.out = nn.Linear(d_model, d_model, bias=False)
+
+    def forward(self, q,k,v):
+        N = q.shape[0]
+        q = self.wq(q).reshape([N, -1, self.n_heads, self.d_head])
+        k = self.wk(k).reshape([N, -1, self.n_heads, self.d_head])
+        v = self.wv(v).reshape([N, -1, self.n_heads, self.d_head])
+
+        atten = torch.einsum('nqhd,nkhd->nhqk', q, k)
+        atten = atten / (self.d_model ** 0.5)
         atten = torch.softmax(atten, dim=-1)
-        return torch.einsum('nqk,ndk->ndq', atten, v)
+
+        v = torch.einsum('nhqk,nkhd->nqhd', atten, v).reshape([N, -1, self.d_model])
+        return self.out(v)
+
+
+class TransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model: int = 256, nhead: int = 8, dim_feedforward=2048, dropout=0.0):
+        super().__init__()
+        self.atten = Attention(d_model, nhead, dropout)
+        # Implementation of Feedforward model
+        self.ff =  nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
+            nn.Dropout(dropout),
+            nn.ReLU(),
+            nn.Linear(dim_feedforward, d_model)
+        )
+        self.norm1 = nn.Sequential(Transpose(), nn.BatchNorm1d(d_model), Transpose())
+        self.norm2 = nn.Sequential(Transpose(), nn.BatchNorm1d(d_model), Transpose())
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.norm1(x)
+        x = x + self.dropout1(self.atten(x, x, x))
+        x = x + self.dropout2(self.ff(self.norm2(x)))
+        return x
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, n_layers):
+        super().__init__()
+        self.layers = nn.ModuleList([TransformerEncoderLayer() for _ in range(n_layers)])
+        self.n_layers = n_layers
+
+    def forward(self, x):
+        for layer in self.layers: x = layer(x)
+        return x

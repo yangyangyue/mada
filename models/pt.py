@@ -10,7 +10,8 @@ import math
 import torch
 from torch import Tensor, nn
 
-from models.transformer import TransformerEncoder
+from models.common import TransformerEncoder
+
 
 
 
