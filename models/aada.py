@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+from models.attention import AutoEncoder
+
 class AadaNet(nn.Module):
     def __init__(self, patch_size=8, patch_stride=4, channels_list=(64, 128, 256), window_size=1024, activation=None, conv=True, attn=True, cross=True, bridge='cross', kl=True):
         self.cross, self.kl = cross, kl

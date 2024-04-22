@@ -19,14 +19,7 @@ from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 
 from dataset import NilmDataset
 from models.aada import AadaNet
-from models.acvae import AcvaeNet
-from models.ae import AeNet
-from models.apt import AptNet
-from models.avae import AvaeNet
-from models.cae import CaeNet
-from models.pt import PtNet
 from models.vae import VaeNet
-from models.unet import VAE_method_3_
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
@@ -43,20 +36,6 @@ class NilmNet(L.LightningModule):
             self.model = AadaNet(channels=sec.getint('channels'), n_layers=sec.getint('n_layers'))
         elif net_name == 'vae':
             self.model = VaeNet()
-        elif net_name == 'avae':
-            self.model = AvaeNet()
-        elif net_name == 'acvae':
-            self.model =  AcvaeNet()
-        elif net_name == 'unet':
-            self.model = VAE_method_3_()
-        elif net_name == 'cae':
-            self.mode = CaeNet()
-        elif net_name == 'ae':
-            self.model = AeNet()
-        elif net_name == 'pt':
-            self.model = PtNet()
-        elif net_name == 'apt':
-            self.model = AptNet()
         self.x = []
         self.y = []
         self.y_hat = []
