@@ -1,95 +1,31 @@
-"""
-MIT License
-Copyright (c) 2024-present lily.
-
-written by lily
-email: lily231147@gmail.com
-"""
-
 import torch
 from torch import nn
 
-from models.common import Attention, ExampleEncoder, IbnNet
-
-
-
-class DownNet(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.ibn = IbnNet(in_channels, out_channels,)
-
-    def forward(self, x):
-        x = self.ibn(x)
-        return torch.max_pool1d(x, kernel_size=2)
-
-
-class UpNet(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.ibn = IbnNet(in_channels, out_channels)
-        self.attention = Attention(out_channels)
-        self.up = nn.ConvTranspose1d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        
-
-    def forward(self, y, x):
-        y = self.ibn(y)
-        y = y + self.attention(y, x, x)
-        y = self.up(y)
-        return y
-
-class Encoder(nn.Module):
-    def __init__(self, channels, n_layers) -> None:
-        super().__init__()
-        self.layers = nn.ModuleList([DownNet(1, channels)] + [DownNet(channels, channels) for _ in range(n_layers-1)])
-    
-    def forward(self, x):
-        xs = []
-        for layer in self.layers:
-            x = layer(x)
-            xs.append(x)
-        return xs
-
-
-class Decoder(nn.Module):
-    def __init__(self, channels, n_layers) -> None:
-        super().__init__()
-        self.layers = nn.ModuleList([UpNet(1, channels)] + [UpNet(channels, channels) for _ in range(n_layers-1)])
-    
-    def forward(self, y, xs):
-        for x, layer in zip(xs, self.layers):
-            y = layer(y, x)
-        return y
-    
 class AadaNet(nn.Module):
-    def __init__(self, channels, n_layers, window_size=1024) -> None:
-        super().__init__()
-        self.example_encoder = ExampleEncoder(channels)
-        self.encoder = Encoder(channels, n_layers)
-        self.combine = Attention()
-        self.decoder = Decoder(channels, n_layers)
-        self.linear = nn.Linear(channels, window_size // (1 << n_layers))
-        self.make_out = nn.Conv1d(channels, 1, kernel_size=3, stride=1, padding=1)
-        
-        
-
-    def forward(self, examples, x, gt_apps=None):
-        """
-        Args:
-            examples (N, 3, L): input examples
-            samples (N, L): input samples
-        """
-        xs = self.encoder(x[:, None, :]) # xs: [(N, C, L)] * n_layers
-        x_example = self.example_encoder(examples[:, :, None])
-        # combine
-        z = self.combine(x_example[:, :, None], xs[-1], xs[-1])
-        z = z.flatten(start_dim=1)
-        z = self.linear(z)
-        # decode
-        y = self.decoder(z[:, None, :], reversed(xs))
-        y = self.make_out(y)
-        y = torch.relu(y).squeeze(1)
+    def __init__(self, patch_size=8, patch_stride=4, channels_list=(64, 128, 256), window_size=1024, activation=None, conv=True, attn=True, cross=True, bridge='cross', kl=True):
+        self.cross, self.kl = cross, kl
+        dilation = patch_size // patch_stride
+        def unfold(tensor: torch.Tensor):
+            len_pad =  patch_size - patch_stride
+            tensor = nn.functional.pad(tensor, (0, len_pad), mode="constant", value=0)
+            tensor = tensor.unfold(dimension=-1, size=patch_size, step=patch_stride)
+            return tensor.permute(0, 2, 1)
+        self.unfold = unfold
+        self.ae = AutoEncoder(patch_size, channels_list, patch_size, activation=None, conv=True, attn=True, cross=True, kl=True)
+        self.fold = nn.Sequential(lambda tensor: tensor.permute(0, 2, 1), nn.Flatten(), nn.Linear(dilation * window_size, window_size), nn.ReLU())
+    
+    def forward(self, x, context=None, y_hat=None):
+        # unfold x: patch_size patch_num
+        x = self.unfold(x) 
+        if self.cross: context = self.unfold(context)
+        # auto encode x: N patch_size patch_num
+        if self.kl: x, mu, logvar = self.ae(x, context)
+        else: x = self.ae(x, context)
+        # fold
+        y = self.fold(x)
         if self.training:
-            return ((gt_apps - y)**2).mean()
+            loss = ((y-y_hat) ** 2).mean()
+            if self.kl: loss += (-0.5 * (1 + logvar - mu ** 2 - logvar.exp())).sum(dim=(1, 2)).mean()
+            return loss
         else:
             return y
-
