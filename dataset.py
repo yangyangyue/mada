@@ -25,7 +25,7 @@ from torch.utils.data import Dataset
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256
 
-threshs ={"k": 2000, "m": 200, "d": 10, "w": 20, "f": 50}
+threshs ={"k": 2000, "m": 200, "d": 20, "w": 20, "f": 50}
 ceils = {"k": 3100, "m": 3000, "d": 2500, "w": 2500, "f": 300}
 ukdale_channels = {
     'k': {1: [10], 2: [8], 5: [18]},
@@ -69,7 +69,7 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df['stamp'] = pd.to_datetime(df['stamp'], unit='s')
     df = df.set_index('stamp')
     df = df.resample('6s').mean().ffill(limit=30).dropna()
-    df[df < 5] = 0
+    df[df < 15] = 0
     df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
     return df
 
