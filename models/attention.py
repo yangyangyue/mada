@@ -103,17 +103,14 @@ class Encoder(nn.Module):
     3. post: adjust the sequence 
     4. conv out: down the dimension to z_channels
     """
-    def __init__(self, i_channels, channels_list, z_channels, conv, attn, cross, activation):
+    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, cross, activation):
         super().__init__()
         self.cross = cross
         # conv in
-        self.conv_in1 = nn.Conv1d(i_channels, channels_list[0],  kernel_size=3, stride=1, padding=1)
-        if self.cross: self.conv_in2 = nn.Conv1d(i_channels, channels_list[0],  kernel_size=3, stride=1, padding=1)
+        self.conv_in1 = nn.Conv1d(i_channels, channels,  kernel_size=3, stride=1, padding=1)
+        if self.cross: self.conv_in2 = nn.Conv1d(i_channels, channels, kernel_size=3, stride=1, padding=1)
         # downsampling
-        in_channels_list = channels_list[:-1]
-        out_channels_list = channels_list[1:]
-        self.down = nn.ModuleList([EncoderLayer(in_, out_, conv, attn, cross, activation) for in_, out_ in zip(in_channels_list, out_channels_list)])
-        channels = out_channels_list[-1]
+        self.down = nn.ModuleList([EncoderLayer(channels, channels, conv, attn, cross, activation) for _ in range(n_layers)])
         # post
         self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
@@ -135,34 +132,28 @@ class DecoderLayer(nn.Module):
     def __init__(self, in_channels, out_channels, conv, attn, bridge, activation):
         super().__init__()
         self.conv, self.attn, self.bridge = conv, attn, bridge
+        if self.conv: self.res1 = ResnetBlock(in_channels, out_channels, activation)
         if self.attn: self.self_ = AttnBlock(in_channels)
         if self.bridge == 'cross': self.combine = AttnBlock(in_channels)
         elif self.bridge == 'concat': self.combine = ResnetBlock(in_channels*2, in_channels, activation)
-        if self.conv: 
-            self.res1 = ResnetBlock(in_channels, out_channels, activation)
-            in_channels = out_channels
         self.up = Upsample(in_channels)
     
     def forward(self, x, context=None):
+        if self.conv: x = self.res1(x)
         if self.attn: x = self.self_(x)
         if self.bridge == 'cross': x = self.combine(x, context)
         elif self.bridge == 'concat': x = self.combine(torch.cat([x, context], dim=1))
-        if self.conv: x = self.res1(x)
         x = self.up(x)
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, out_channels, channels_list, z_channels, conv, attn, bridge, activation):
+    def __init__(self, out_channels, channels, z_channels, n_layers, conv, attn, bridge, activation):
         super().__init__()
         self.bridge=bridge
-        channels = channels_list[0]
         self.conv_in = nn.Conv1d(z_channels, channels, kernel_size=3, stride=1, padding=1)
         self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # upsampling
-        in_channels_list = channels_list[:-1]
-        out_channels_list = channels_list[1:]
-        self.up = nn.ModuleList([DecoderLayer(in_, out_, conv, attn, bridge, activation) for in_, out_ in zip(in_channels_list, out_channels_list)])
-        channels = out_channels_list[-1]
+        self.up = nn.ModuleList([DecoderLayer(channels, channels, conv, attn, bridge, activation) for _ in range(n_layers)])
         # conv out
         self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
 
@@ -177,11 +168,11 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels_list, z_channels, conv, attn, cross, bridge, kl, activation):
+    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, cross, bridge, kl, activation):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels_list, 2*z_channels if self.kl else z_channels, conv, attn, cross, activation)
-        self.decoder = Decoder(io_channels, channels_list[::-1], z_channels, conv, attn, bridge, activation)
+        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, cross, activation)
+        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, conv, attn, bridge, activation)
     
     def forward(self, x, context=None):
         # encoder

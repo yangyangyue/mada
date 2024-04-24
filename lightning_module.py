@@ -43,7 +43,7 @@ class NilmNet(L.LightningModule):
         self.losses = []
     
     def forward(self, examples, samples, gt_apps=None):
-        return self.model(examples, samples, gt_apps)
+        return self.model(samples, examples, gt_apps)
     
     
     def training_step(self, batch, _):
