@@ -57,7 +57,7 @@ class AttnBlock(nn.Module):
         h_ = x
         h_ = self.norm(h_)
         q = self.q(h_)
-        if not context: context = h_
+        if context is None: context = h_
         k = self.k(context)
         v = self.v(context)
         # compute attention
@@ -93,9 +93,16 @@ class EncoderLayer(nn.Module):
         if self.cross: x = self.cross_attn(x, context)
         x = self.down1(x)
         if self.cross: context = self.down2(context)
-        return x, context if self.cross else x
+        return (x, context) if self.cross else x
 
 class Encoder(nn.Module):
+    """
+    Encoder in AE, consist of:
+    1. conv in: up the dimension to channels_list[0]
+    2. down: down sample the sequence 
+    3. post: adjust the sequence 
+    4. conv out: down the dimension to z_channels
+    """
     def __init__(self, i_channels, channels_list, z_channels, conv, attn, cross, activation):
         super().__init__()
         self.cross = cross
@@ -110,7 +117,7 @@ class Encoder(nn.Module):
         # post
         self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
-        self.conv_out = nn.Sequential(nn.BatchNorm1d(), activation, nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1))
+        self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation, nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1))
 
     def forward(self, x, context=None):
         x = self.conv_in1(x)
@@ -120,7 +127,7 @@ class Encoder(nn.Module):
             if self.cross: x, context = layer(x, context)
             else: x = layer(x)
             hs.append(x)
-        h = self.post(hs[-1])
+        h = self.post(x)
         z = self.conv_out(h)
         return z, hs
 
@@ -128,19 +135,19 @@ class DecoderLayer(nn.Module):
     def __init__(self, in_channels, out_channels, conv, attn, bridge, activation):
         super().__init__()
         self.conv, self.attn, self.bridge = conv, attn, bridge
-        if self.conv: 
-            self.res1 = ResnetBlock(in_channels, out_channels, activation)
-            in_channels = out_channels
         if self.attn: self.self_ = AttnBlock(in_channels)
         if self.bridge == 'cross': self.combine = AttnBlock(in_channels)
         elif self.bridge == 'concat': self.combine = ResnetBlock(in_channels*2, in_channels, activation)
+        if self.conv: 
+            self.res1 = ResnetBlock(in_channels, out_channels, activation)
+            in_channels = out_channels
         self.up = Upsample(in_channels)
     
     def forward(self, x, context=None):
-        x = self.res1(x)
-        x = self.self_(x)
+        if self.attn: x = self.self_(x)
         if self.bridge == 'cross': x = self.combine(x, context)
         elif self.bridge == 'concat': x = self.combine(torch.cat([x, context], dim=1))
+        if self.conv: x = self.res1(x)
         x = self.up(x)
         return x
     
@@ -148,7 +155,7 @@ class Decoder(nn.Module):
     def __init__(self, out_channels, channels_list, z_channels, conv, attn, bridge, activation):
         super().__init__()
         self.bridge=bridge
-        channels = channels_list[-1]
+        channels = channels_list[0]
         self.conv_in = nn.Conv1d(z_channels, channels, kernel_size=3, stride=1, padding=1)
         self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # upsampling
@@ -156,10 +163,8 @@ class Decoder(nn.Module):
         out_channels_list = channels_list[1:]
         self.up = nn.ModuleList([DecoderLayer(in_, out_, conv, attn, bridge, activation) for in_, out_ in zip(in_channels_list, out_channels_list)])
         channels = out_channels_list[-1]
-        # post
-        self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
-        self.conv_out = nn.Sequential(nn.BatchNorm1d(), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
+        self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
 
     def forward(self, z, contexts=None):
         h = self.conv_in(z)
@@ -176,17 +181,19 @@ class AutoEncoder(nn.Module):
         super().__init__()
         self.bridge, self.kl = bridge, kl
         self.encoder = Encoder(io_channels, channels_list, 2*z_channels if self.kl else z_channels, conv, attn, cross, activation)
-        self.decoder = Decoder(io_channels, channels_list, z_channels, conv, attn, bridge, activation)
+        self.decoder = Decoder(io_channels, channels_list[::-1], z_channels, conv, attn, bridge, activation)
     
     def forward(self, x, context=None):
+        # encoder
         z, hs = self.encoder(x, context)
-        mu, logvar = torch.chunk(z, 2, dim=1)
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        z = eps * std + mu
-
-        if self.bridge: y = self.decoder(z, hs)
+        # do variation inference if kl==True
+        if self.kl:
+            mu, logvar = torch.chunk(z, 2, dim=1)
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            z = eps * std + mu
+        # decoder
+        if self.bridge: y = self.decoder(z, hs[::-1])
         else: y = self.decoder(z)
 
-        if self.kl: return y, mu, logvar
-        else: return y
+        return (y, mu, logvar) if self.kl else y
