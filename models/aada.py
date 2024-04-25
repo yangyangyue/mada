@@ -4,7 +4,7 @@ from torch import nn
 from models.attention import AutoEncoder
 
 class AadaNet(nn.Module):
-    def __init__(self, window_size=1024, patch_size=8, patch_stride=8, channels=256, n_layers=4, conv=True, attn=True, cross=True, bridge='cross', kl=True, activation=None):
+    def __init__(self, window_size=1024, patch_size=1, patch_stride=1, channels=256, n_layers=5, conv=True, attn=False, cross=False, bridge='concat', kl=True, activation=None):
         super().__init__()
         self.cross, self.kl = cross, kl
         dilation = patch_size // patch_stride
@@ -20,9 +20,9 @@ class AadaNet(nn.Module):
             def __init__(self, func):
                 super().__init__()
                 self.func = func
-            def forward(self, x):
-                return self.func(x)
-        self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), nn.Linear(dilation * window_size, window_size), activation)
+            def forward(self, *args):
+                return self.func(args)
+        self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), activation)
     
     def forward(self, x, context=None, y_hat=None):
         # unfold x and context to shape (N, patch_size, window_size//patch_stride)

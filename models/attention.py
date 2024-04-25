@@ -30,17 +30,6 @@ class Upsample(nn.Module):
         x = nn.functional.interpolate(x, scale_factor=2.0, mode="nearest")
         x = self.conv(x)
         return x
-
-
-class Downsample(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.conv = nn.Conv1d(channels, channels, kernel_size=3, stride=2, padding=0)
-
-    def forward(self, x):
-        x = nn.functional.pad(x, (0, 1), mode="constant", value=0)
-        x = self.conv(x)
-        return x
     
 class AttnBlock(nn.Module):
     def __init__(self, channels):
@@ -73,26 +62,25 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, conv, attn, cross, activation):
+    def __init__(self, channels, conv, attn, cross, activation):
         super().__init__()
         self.conv, self.attn, self.cross = conv, attn, cross
-        if self.conv: self.res1 = ResnetBlock(in_channels, out_channels, activation)
-        if self.conv and self.cross: self.res2 = ResnetBlock(in_channels, out_channels, activation)
-        if self.conv: in_channels = out_channels
-        if self.attn: self.self_1 = AttnBlock(in_channels)
-        if self.attn and self.cross: self.self_2 = AttnBlock(in_channels)
-        if self.cross: self.cross_attn = AttnBlock(in_channels)
-        self.down1 = Downsample(in_channels)
-        if self.cross: self.down2 = Downsample(in_channels)
+        if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
+        if self.conv and self.cross: self.res2 = ResnetBlock(channels, channels, activation)
+        if self.attn: self.self_1 = AttnBlock(channels)
+        if self.attn and self.cross: self.self_2 = AttnBlock(channels)
+        if self.cross: self.cross_attn = AttnBlock(channels)
+
     
     def forward(self, x, context=None):
+        x = nn.functional.max_pool1d(x, 2)
+        if self.cross: context = nn.functional.max_pool1d(context, 2)
         if self.conv: x = self.res1(x)
         if self.conv and self.cross: context = self.res2(context)
         if self.attn: x = self.self_1(x)
         if self.attn and self.cross: context = self.self_2(context)
         if self.cross: x = self.cross_attn(x, context)
-        x = self.down1(x)
-        if self.cross: context = self.down2(context)
+
         return (x, context) if self.cross else x
 
 class Encoder(nn.Module):
@@ -110,11 +98,12 @@ class Encoder(nn.Module):
         self.conv_in1 = nn.Conv1d(i_channels, channels,  kernel_size=3, stride=1, padding=1)
         if self.cross: self.conv_in2 = nn.Conv1d(i_channels, channels, kernel_size=3, stride=1, padding=1)
         # downsampling
-        self.down = nn.ModuleList([EncoderLayer(channels, channels, conv, attn, cross, activation) for _ in range(n_layers)])
-        # post
-        self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
+        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, cross, activation) for _ in range(n_layers)])
+        # # post
+        # self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
-        self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation, nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1))
+        # self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation, nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1))
+        self.conv_out = nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, context=None):
         x = self.conv_in1(x)
@@ -124,26 +113,27 @@ class Encoder(nn.Module):
             if self.cross: x, context = layer(x, context)
             else: x = layer(x)
             hs.append(x)
-        h = self.post(x)
-        z = self.conv_out(h)
+        # h = self.post(x)
+        z = self.conv_out(x)
         return z, hs
 
 class DecoderLayer(nn.Module):
-    def __init__(self, in_channels, out_channels, conv, attn, bridge, activation):
+    def __init__(self, channels, conv, attn, bridge, activation):
         super().__init__()
         self.conv, self.attn, self.bridge = conv, attn, bridge
-        if self.conv: self.res1 = ResnetBlock(in_channels, out_channels, activation)
-        if self.attn: self.self_ = AttnBlock(in_channels)
-        if self.bridge == 'cross': self.combine = AttnBlock(in_channels)
-        elif self.bridge == 'concat': self.combine = ResnetBlock(in_channels*2, in_channels, activation)
-        self.up = Upsample(in_channels)
+        self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        if self.bridge == 'cross': self.combine = AttnBlock(channels)
+        if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
+        if self.attn: self.self_ = AttnBlock(channels)
+       
     
     def forward(self, x, context=None):
+        # combine
+        if self.bridge == 'cross': x = self.up(self.combine(x, context))
+        elif self.bridge == 'concat': x = self.up(torch.cat([x, context], dim=1))
+        else: x = self.up(x)
         if self.conv: x = self.res1(x)
         if self.attn: x = self.self_(x)
-        if self.bridge == 'cross': x = self.combine(x, context)
-        elif self.bridge == 'concat': x = self.combine(torch.cat([x, context], dim=1))
-        x = self.up(x)
         return x
     
 class Decoder(nn.Module):
@@ -151,15 +141,16 @@ class Decoder(nn.Module):
         super().__init__()
         self.bridge=bridge
         self.conv_in = nn.Conv1d(z_channels, channels, kernel_size=3, stride=1, padding=1)
-        self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
+        # self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # upsampling
-        self.up = nn.ModuleList([DecoderLayer(channels, channels, conv, attn, bridge, activation) for _ in range(n_layers)])
+        self.up = nn.ModuleList([DecoderLayer(channels, conv, attn, bridge, activation) for _ in range(n_layers)])
         # conv out
-        self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
+        # self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
+        self.conv_out = nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, z, contexts=None):
         h = self.conv_in(z)
-        h = self.pre(h)
+        # h = self.pre(h)
         if self.bridge: 
             for layer, context in zip(self.up, contexts): h = layer(h, context)
         else:
@@ -186,5 +177,4 @@ class AutoEncoder(nn.Module):
         # decoder
         if self.bridge: y = self.decoder(z, hs[::-1])
         else: y = self.decoder(z)
-
         return (y, mu, logvar) if self.kl else y
