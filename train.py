@@ -22,14 +22,14 @@ def train(args, config):
     method, houses, app_abbs =args.method, args.houses, args.apps
     # model and data
     model = NilmNet(args.method, config)
-    datamodule = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=32)
+    datamodule = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=config.getint('default', 'batch_size'))
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
         dirpath='~/checkpoints/',
         filename=f'{method}-{houses}-{app_abbs}' + '-{epoch}',
         monitor="val_mae"
     )
-    early_stop_callback = EarlyStopping(monitor="val_mae", patience=20)
+    early_stop_callback = EarlyStopping(monitor="val_mae", patience=config.getint('default', 'patience'))
     # trainer
     trainer = pl.Trainer(
         devices="auto",

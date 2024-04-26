@@ -3,9 +3,17 @@ from torch import nn
 
 from models.attention import AutoEncoder
 
-class AadaNet(nn.Module):
-    def __init__(self, window_size=1024, patch_size=1, patch_stride=1, channels=256, n_layers=5, conv=True, attn=False, cross=False, bridge='concat', kl=True, activation=None):
+class Lambda(nn.Module):
+    def __init__(self, func):
         super().__init__()
+        self.func = func
+    def forward(self, x):
+        return self.func(x)
+
+class AadaNet(nn.Module):
+    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=5, conv=True, attn=False, cross=False, bridge='concat', kl=True, softmax='_1', activation=None):
+        super().__init__()
+        assert patch_size == patch_stride or patch_size == 2 * patch_stride
         self.cross, self.kl = cross, kl
         dilation = patch_size // patch_stride
         activation = nn.ReLU() if activation is None else activation
@@ -15,14 +23,17 @@ class AadaNet(nn.Module):
             tensor = tensor.unfold(dimension=-1, size=patch_size, step=patch_stride)
             return tensor.permute(0, 2, 1)
         self.unfold = unfold
-        self.ae = AutoEncoder(patch_size, channels, patch_size, n_layers, conv, attn, cross, bridge, kl, activation)
-        class Lambda(nn.Module):
-            def __init__(self, func):
-                super().__init__()
-                self.func = func
-            def forward(self, *args):
-                return self.func(args)
-        self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), activation)
+        self.ae = AutoEncoder(patch_size, channels, z_channels, n_layers, conv, attn, cross, bridge, kl, softmax, activation)
+        if dilation == 1:
+            self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), nn.ReLU())
+        else:
+            self.fold = nn.Sequential(
+                nn.Conv1d(patch_size, patch_size, kernel_size=3, stride=1, padding=1), 
+                nn.MaxPool1d(2), 
+                nn.Conv1d(patch_size, patch_size, kernel_size=3, stride=1, padding=1), 
+                Lambda(lambda tensor: tensor.permute(0, 2, 1)), 
+                nn.Flatten(), 
+                nn.ReLU())
     
     def forward(self, x, context=None, y_hat=None):
         # unfold x and context to shape (N, patch_size, window_size//patch_stride)

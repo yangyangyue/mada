@@ -1,6 +1,11 @@
 import torch
 from torch import nn
 
+def softmax_1(tensor, dim=-1):
+    exp_tensor = torch.exp(tensor-tensor.max(dim=dim, keepdim=True))
+    norm_factor = 1 + exp_tensor.sum(dim=-1, keepdim=True)
+    return exp_tensor / norm_factor
+
 class ResnetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, activation):
         super().__init__()
@@ -32,9 +37,10 @@ class Upsample(nn.Module):
         return x
     
 class AttnBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, softmax):
         super().__init__()
         self.in_channels = channels
+        self.softmax = softmax
         self.norm = nn.BatchNorm1d(channels)
         self.q = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
         self.k = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
@@ -54,7 +60,8 @@ class AttnBlock(nn.Module):
         q = q.permute(0,2,1)   # b,l,c
         w_ = torch.bmm(q,k)     # b,l,l   
         w_ = w_ * (int(c)**(-0.5))
-        w_ = torch.nn.functional.softmax(w_, dim=2)
+        if self.softmax == '_1': w_= softmax_1(w_, dim=2)
+        else: w_ = torch.nn.functional.softmax(w_, dim=2)
         # attend to values
         w_ = w_.permute(0,2,1)   # b,l,l (first l of k, second of q)
         h_ = torch.bmm(v,w_)     # b, c,hw 
@@ -62,14 +69,14 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, cross, activation):
+    def __init__(self, channels, conv, attn, cross, softmax, activation):
         super().__init__()
         self.conv, self.attn, self.cross = conv, attn, cross
         if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
         if self.conv and self.cross: self.res2 = ResnetBlock(channels, channels, activation)
-        if self.attn: self.self_1 = AttnBlock(channels)
-        if self.attn and self.cross: self.self_2 = AttnBlock(channels)
-        if self.cross: self.cross_attn = AttnBlock(channels)
+        if self.attn: self.self_1 = AttnBlock(channels,softmax)
+        if self.attn and self.cross: self.self_2 = AttnBlock(channels, softmax)
+        if self.cross: self.cross_attn = AttnBlock(channels, softmax)
 
     
     def forward(self, x, context=None):
@@ -91,14 +98,14 @@ class Encoder(nn.Module):
     3. post: adjust the sequence 
     4. conv out: down the dimension to z_channels
     """
-    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, cross, activation):
+    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, cross, softmax, activation):
         super().__init__()
         self.cross = cross
         # conv in
         self.conv_in1 = nn.Conv1d(i_channels, channels,  kernel_size=3, stride=1, padding=1)
         if self.cross: self.conv_in2 = nn.Conv1d(i_channels, channels, kernel_size=3, stride=1, padding=1)
         # downsampling
-        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, cross, activation) for _ in range(n_layers)])
+        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, cross, softmax, activation) for _ in range(n_layers)])
         # # post
         # self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
@@ -118,13 +125,13 @@ class Encoder(nn.Module):
         return z, hs
 
 class DecoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, bridge, activation):
+    def __init__(self, channels, conv, attn, bridge, softmax, activation):
         super().__init__()
         self.conv, self.attn, self.bridge = conv, attn, bridge
         self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        if self.bridge == 'cross': self.combine = AttnBlock(channels)
+        if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
         if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
-        if self.attn: self.self_ = AttnBlock(channels)
+        if self.attn: self.self_ = AttnBlock(channels, softmax)
        
     
     def forward(self, x, context=None):
@@ -137,13 +144,13 @@ class DecoderLayer(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, out_channels, channels, z_channels, n_layers, conv, attn, bridge, activation):
+    def __init__(self, out_channels, channels, z_channels, n_layers, conv, attn, bridge, softmax, activation):
         super().__init__()
         self.bridge=bridge
         self.conv_in = nn.Conv1d(z_channels, channels, kernel_size=3, stride=1, padding=1)
         # self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # upsampling
-        self.up = nn.ModuleList([DecoderLayer(channels, conv, attn, bridge, activation) for _ in range(n_layers)])
+        self.up = nn.ModuleList([DecoderLayer(channels, conv, attn, bridge, softmax, activation) for _ in range(n_layers)])
         # conv out
         # self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
         self.conv_out = nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1)
@@ -159,11 +166,11 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, cross, bridge, kl, activation):
+    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, cross, bridge, kl, softmax, activation):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, cross, activation)
-        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, conv, attn, bridge, activation)
+        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, cross, softmax, activation)
+        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, conv, attn, bridge, softmax, activation)
     
     def forward(self, x, context=None):
         # encoder

@@ -33,7 +33,18 @@ class NilmNet(L.LightningModule):
         self.save_path = save_path
         if net_name == 'aada':
             sec = config['aada']
-            self.model = AadaNet(channels=sec.getint('channels'), n_layers=sec.getint('n_layers'))
+            self.model = AadaNet(
+                sec.getint('patch_size'),
+                sec.getint('patch_stride'),
+                sec.getint('channels'),
+                sec.getint('z_channels'),
+                sec.getint('n_layers'),
+                sec.getboolean('conv'),
+                sec.getboolean('attn'),
+                sec.getboolean('cross'),
+                sec.get('bridge'),
+                sec.getboolean('kl'),
+                sec.get('softmax'))
         elif net_name == 'vae':
             self.model = VaeNet()
         self.x = []
@@ -104,7 +115,7 @@ class NilmNet(L.LightningModule):
         self.print2file('test_mae', mae.item(), 'test_mae_on', mae_on.item(), 'test_mre_on', mre_on.item())
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.AdamW(self.parameters())
         scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
         return [optimizer], [scheduler]
 
