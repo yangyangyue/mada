@@ -11,10 +11,10 @@ class Lambda(nn.Module):
         return self.func(x)
 
 class AadaNet(nn.Module):
-    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=6, conv=True, attn=False, cross=False, bridge='concat', kl=False, softmax='_0', activation=None):
+    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=6, conv=True, attn=False, fusion='concat', bridge='concat', kl=False, softmax='_0', activation=None):
         super().__init__()
         assert patch_size == patch_stride or patch_size == 2 * patch_stride
-        self.cross, self.kl = cross, kl
+        self.fusion, self.kl = fusion, kl
         dilation = patch_size // patch_stride
         activation = nn.ReLU() if activation is None else activation
         def unfold(tensor: torch.Tensor):
@@ -23,7 +23,7 @@ class AadaNet(nn.Module):
             tensor = tensor.unfold(dimension=-1, size=patch_size, step=patch_stride)
             return tensor.permute(0, 2, 1)
         self.unfold = unfold
-        self.ae = AutoEncoder(patch_size, channels, z_channels, n_layers, conv, attn, cross, bridge, kl, softmax, activation)
+        self.ae = AutoEncoder(patch_size, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax, activation)
         if dilation == 1:
             self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), nn.ReLU())
         else:
@@ -38,7 +38,7 @@ class AadaNet(nn.Module):
     def forward(self, x, context=None, y_hat=None):
         # unfold x and context to shape (N, patch_size, window_size//patch_stride)
         x = self.unfold(x) 
-        if self.cross: context = self.unfold(context)
+        if self.fusion: context = self.unfold(context)
         # feed x to autoencoder, don't change the shape
         if self.kl: x, mu, logvar = self.ae(x, context)
         else: x = self.ae(x, context)

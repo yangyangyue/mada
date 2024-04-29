@@ -1,12 +1,12 @@
-from matplotlib import pyplot as plt
-import pandas as pd
-import numpy as np
-x =np.loadtxt('results/')
-plt.figure()
-plt.plot(x[0, :])
-plt.plot(x[1: ])
-plt.plot(x[2:, ])
-plt.show()
+# from matplotlib import pyplot as plt
+# import pandas as pd
+# import numpy as np
+# x =np.loadtxt('results/')
+# plt.figure()
+# plt.plot(x[0, :])
+# plt.plot(x[1: ])
+# plt.plot(x[2:, ])
+# plt.show()
 
 
 # from sconf import Config
@@ -35,3 +35,8 @@ plt.show()
 
 # 问题：模型管理、模型特化、新设备必须重新训练设备模型
 # 其实，也可以直接检索增强，不固定example，直接从知识库中搜索
+
+import pandas as pd
+
+
+m = pd.read_csv('C:\\Users\\21975\Downloads\\nilm_lf\\ukdale\house_2\\channel_15.dat', sep=" ", header=None).iloc[:, :2]

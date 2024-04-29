@@ -39,7 +39,7 @@ class NilmNet(L.LightningModule):
                 sec.getint('n_layers'),
                 sec.getboolean('conv'),
                 sec.getboolean('attn'),
-                sec.getboolean('cross'),
+                sec.get('fusion'),
                 sec.get('bridge'),
                 sec.getboolean('kl'),
                 sec.get('softmax'))
