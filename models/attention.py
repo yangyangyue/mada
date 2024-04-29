@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 def softmax_1(tensor, dim=-1):
-    exp_tensor = torch.exp(tensor-tensor.max(dim=dim, keepdim=True))
+    exp_tensor = torch.exp(tensor-tensor.max(dim=dim, keepdim=True)[0])
     norm_factor = 1 + exp_tensor.sum(dim=-1, keepdim=True)
     return exp_tensor / norm_factor
 
@@ -11,30 +11,22 @@ class ResnetBlock(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.stream = nn.Sequential(    
-            nn.BatchNorm1d(in_channels),
+        mid_channels = out_channels // 4
+        self.stream = nn.Sequential(
+            nn.Conv1d(in_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(mid_channels),
             activation,
-            nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(out_channels),
+            nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(mid_channels),
             activation,
-            nn.Conv1d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            nn.Conv1d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(out_channels)
         )
-        if self.in_channels != self.out_channels: self.shortcut = nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x):
         h = self.stream(x)
-        if self.in_channels != self.out_channels: x = self.shortcut(x)
-        return x + h
-    
-class Upsample(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.conv = nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1)
-
-    def forward(self, x):
-        x = nn.functional.interpolate(x, scale_factor=2.0, mode="nearest")
-        x = self.conv(x)
-        return x
+        if self.in_channels == self.out_channels: h += x
+        return h
     
 class AttnBlock(nn.Module):
     def __init__(self, channels, softmax):
@@ -106,10 +98,7 @@ class Encoder(nn.Module):
         if self.cross: self.conv_in2 = nn.Conv1d(i_channels, channels, kernel_size=3, stride=1, padding=1)
         # downsampling
         self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, cross, softmax, activation) for _ in range(n_layers)])
-        # # post
-        # self.post = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # conv out
-        # self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation, nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1))
         self.conv_out = nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, context=None):
@@ -120,7 +109,6 @@ class Encoder(nn.Module):
             if self.cross: x, context = layer(x, context)
             else: x = layer(x)
             hs.append(x)
-        # h = self.post(x)
         z = self.conv_out(x)
         return z, hs
 
@@ -148,16 +136,13 @@ class Decoder(nn.Module):
         super().__init__()
         self.bridge=bridge
         self.conv_in = nn.Conv1d(z_channels, channels, kernel_size=3, stride=1, padding=1)
-        # self.pre = nn.Sequential(ResnetBlock(channels, channels, activation), AttnBlock(channels), ResnetBlock(channels, channels, activation))
         # upsampling
         self.up = nn.ModuleList([DecoderLayer(channels, conv, attn, bridge, softmax, activation) for _ in range(n_layers)])
         # conv out
-        # self.conv_out = nn.Sequential(nn.BatchNorm1d(channels), activation,nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1))
         self.conv_out = nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, z, contexts=None):
         h = self.conv_in(z)
-        # h = self.pre(h)
         if self.bridge: 
             for layer, context in zip(self.up, contexts): h = layer(h, context)
         else:

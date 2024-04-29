@@ -19,7 +19,7 @@ from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 
 from dataset import NilmDataset
 from models.aada import AadaNet
-from models.vae import VaeNet
+from compare.vae import VaeNet
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
@@ -28,8 +28,6 @@ WINDOW_STRIDE = 256
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, config, save_path = None) -> None:
         super().__init__()
-        self.lr = config.getfloat('default', 'lr')
-        self.min_lr = config.getfloat('default', 'min_lr')
         self.save_path = save_path
         if net_name == 'aada':
             sec = config['aada']
@@ -53,14 +51,14 @@ class NilmNet(L.LightningModule):
         self.thresh = []
         self.losses = []
     
-    def forward(self, examples, samples, gt_apps=None):
+    def forward(self, samples, examples, gt_apps=None):
         return self.model(samples, examples, gt_apps)
     
     
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
         samples, gt_apps, examples, threshs, ceils = batch
-        loss = self(examples, samples, gt_apps)
+        loss = self(samples, examples, gt_apps)
         self.losses.append(loss.item())
         return loss
     def on_train_epoch_end(self) -> None:
@@ -71,7 +69,7 @@ class NilmNet(L.LightningModule):
         # tags: (N, 3)
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(examples, samples)
+        pred_apps = self(samples, examples)
         pred_apps[pred_apps < 15] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
@@ -91,7 +89,7 @@ class NilmNet(L.LightningModule):
     
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(examples, samples)
+        pred_apps = self(samples, examples)
         pred_apps[pred_apps < 15] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])

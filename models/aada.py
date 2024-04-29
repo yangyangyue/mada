@@ -11,7 +11,7 @@ class Lambda(nn.Module):
         return self.func(x)
 
 class AadaNet(nn.Module):
-    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=5, conv=True, attn=False, cross=False, bridge='concat', kl=True, softmax='_1', activation=None):
+    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=6, conv=True, attn=False, cross=False, bridge='concat', kl=False, softmax='_0', activation=None):
         super().__init__()
         assert patch_size == patch_stride or patch_size == 2 * patch_stride
         self.cross, self.kl = cross, kl

@@ -9,6 +9,7 @@ email: lily231147@gmail.com
 import torch
 from torch import nn
 
+
 class IbnNet(nn.Module):
     def __init__(self, in_channels, out_channels, use_ins=False):
         super().__init__()
@@ -86,10 +87,6 @@ class VaeNet(nn.Module):
         return kl_loss + reconstruct_loss
 
     def forward(self, _, aggs, apps=None):
-        """
-        Args:
-            aggs: (N, L)
-        """
         # encoder
         x10 = self.layer1_0(aggs[:, None, :])
         x11 = self.layer1_1(x10)
