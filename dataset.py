@@ -25,7 +25,7 @@ from torch.utils.data import Dataset
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256
 
-threshs ={"k": 2000, "m": 200, "d": 20, "w": 20, "f": 50}
+threshs ={"k": 2000, "m": 200, "d": 20, "w": 1200, "f": 50}
 ceils = {"k": 3100, "m": 3000, "d": 2500, "w": 2500, "f": 300}
 ukdale_channels = {
     'k': {1: [10], 2: [8], 5: [18]},
@@ -72,18 +72,6 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df[df < 15] = 0
     df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
     return df
-
-# def load_app(data_dir, set_name, house_id, app_abb):
-#     channels = ukdale_channels[app_abb][house_id] if set_name == 'ukdale' else refit_channels[app_abb][house_id]
-#     power = read(data_dir, set_name, house_id, app_abb, channels[0])
-#     for channel in channels[1:]:
-#         new_power = read(data_dir, set_name, house_id, app_abb, channel)
-#         power = pd.merge(power, new_power, on='stamp', how='outer')
-#     power = power.fillna(0).sum(axis=1).to_frame('power') 
-#     return power
-
-# def load_agg(data_dir, set_name, house_id):
-#     return read(data_dir, set_name, house_id)
 
 
 class NilmDataset(Dataset):
