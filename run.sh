@@ -1,16 +1,15 @@
 rm -rf lightning_logs
+# run for all appliances in ukdale
+# ./run.sh aada
+nohup python train.py --method $1 --houses ukdale15 --apps k &
+nohup python train.py --method $1 --houses ukdale15 --apps m &
+nohup python train.py --method $1 --houses ukdale15 --apps d &
+nohup python train.py --method $1 --houses ukdale15 --apps w &
+nohup python train.py --method $1 --houses ukdale15 --apps f &
 
-python train.py --method acvae --houses ukdale15 --apps kmdwf
-python train.py --method acvae --houses ukdale15 --apps mdwf
-python train.py --method acvae --houses ukdale15 --apps kdwf
-python train.py --method acvae --houses ukdale15 --apps kmwf
-python train.py --method acvae --houses ukdale15 --apps kmdf
-python train.py --method acvae --houses ukdale15 --apps kmdw
-python train.py --method acvae --houses refit256 --apps kmdwf
-python train.py --method acvae --houses refit256 --apps mdwf
-python train.py --method acvae --houses refit256 --apps kdwf
-python train.py --method acvae --houses refit256 --apps kmwf
-python train.py --method acvae --houses refit256 --apps kmdf
-python train.py --method acvae --houses refit256 --apps kmdw
-
-
+# # run for all appliances in refit
+# nohup python train.py --method $1 --houses refit256 --apps k &
+# nohup python train.py --method $1 --houses refit256 --apps m &
+# nohup python train.py --method $1 --houses refit256 --apps d &
+# nohup python train.py --method $1 --houses refit256 --apps w &
+# nohup python train.py --method $1 --houses refit256 --apps f &

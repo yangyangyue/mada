@@ -51,7 +51,19 @@ def get_example(data_dir, set_name, house_id, app_abb, channel, n):
     assert len(examples) == n
     return examples
 
-get_example(dir, 'ukdale', 1, 'k', 10, N )
+# get_example(dir, 'ukdale', 1, 'w', 5, N)
+# get_example(dir, 'ukdale', 2, 'w', 12, N)
+# get_example(dir, 'ukdale', 5, 'w', 24, N)
+# get_example(dir, 'refit', 2, 'w', 2, N)
+# get_example(dir, 'refit', 5, 'w', 3, N)
+# get_example(dir, 'refit', 6, 'w', 2, N)
+
+# for app_abb, house_channels in dataset.ukdale_channels.items():
+#     for house_id, channels in house_channels.items():
+#         if house_id == 2:
+#             apps = dataset.read(dir, 'ukdale', house_id, app_abb, channels[0]).to_numpy(dtype=np.float32)[:, 0]
+#             print(app_abb, np.mean(apps[apps < dataset.threshs[app_abb]]))
+
 
 # if __name__ == '__main__':
 #     for app_abb, house_channels in dataset.ukdale_channels.items():
@@ -66,5 +78,3 @@ get_example(dir, 'ukdale', 1, 'k', 10, N )
 #             for i, channel in enumerate(channels):
 #                 examples.extend(get_example(dir, 'refit', house_id, app_abb, channel, (N+i) // len(channels)))
 #             np.save(Path('examples') / f'refit{house_id}-{app_abb}.npy', np.stack(examples))
-
-
