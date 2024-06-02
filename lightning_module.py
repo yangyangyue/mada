@@ -20,6 +20,7 @@ from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
 from dataset import NilmDataset
 from models.aada import AadaNet
 from compare.vae import VaeNet
+from models.atten import TmpNet
 
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
@@ -45,6 +46,8 @@ class NilmNet(L.LightningModule):
                 sec.get('softmax'))
         elif net_name == 'vae':
             self.model = VaeNet()
+        elif net_name == 'tmp':
+            self.model = TmpNet()
         self.x = []
         self.y = []
         self.y_hat = []

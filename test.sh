@@ -7,7 +7,7 @@
 # train avae of all appliance from ukdale15 
 # python test.py --method avae --houses ukdale2 --apps kmdwf --ckpt avae-ukdale15-kmdwf
 # train aada of all appliance from ukdale15
-python test.py --method aada --houses ukdale2 --apps kmdwf  --ckpt aada-ukdale15-kmdwf
+python test.py --method aada --houses ukdale2 --apps w  --ckpt aada-ukdale15-w
 
 
 # train vae from refit256 
