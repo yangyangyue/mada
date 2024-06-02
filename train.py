@@ -51,6 +51,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # config
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(f'config/{args.apps}.ini')
     # train
     train(args, config)

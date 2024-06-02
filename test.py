@@ -37,7 +37,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(f'config/{args.apps}.ini')
     for app_abb in args.apps:
         test(args.method, args.houses, app_abb,  args.ckpt, config)
         
