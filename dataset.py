@@ -104,12 +104,12 @@ class NilmDataset(Dataset):
             self.apps = self.apps[select_ids]
 
         # balance the number of samples
-        pos_idx = np.nonzero(np.any(self.apps >= self.app_thresh, axis=1))[0]
-        neg_idx = np.nonzero(np.any(self.apps < self.app_thresh, axis=1))[0]
-        if 2 * len(pos_idx) < len(neg_idx):
-            neg_idx = np.random.choice(neg_idx, 2 * len(pos_idx), replace=False)
-            self.samples = np.concatenate([self.samples[pos_idx], self.samples[neg_idx]])
-            self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
+        # pos_idx = np.nonzero(np.any(self.apps >= self.app_thresh, axis=1))[0]
+        # neg_idx = np.nonzero(np.any(self.apps < self.app_thresh, axis=1))[0]
+        # if 2 * len(pos_idx) < len(neg_idx):
+        #     neg_idx = np.random.choice(neg_idx, 2 * len(pos_idx), replace=False)
+        #     self.samples = np.concatenate([self.samples[pos_idx], self.samples[neg_idx]])
+        #     self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
 
     def __len__(self):
         return len(self.samples)

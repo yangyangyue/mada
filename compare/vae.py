@@ -86,7 +86,7 @@ class VaeNet(nn.Module):
         reconstruct_loss = torch.mean((apps - apps_pred)**2)
         return kl_loss + reconstruct_loss
 
-    def forward(self, _, aggs, apps=None):
+    def forward(self, aggs, _, apps=None):
         # encoder
         x10 = self.layer1_0(aggs[:, None, :])
         x11 = self.layer1_1(x10)

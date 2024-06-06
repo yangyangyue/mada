@@ -11,29 +11,11 @@ class Lambda(nn.Module):
         return self.func(x)
 
 class AadaNet(nn.Module):
-    def __init__(self, patch_size=1, patch_stride=1, channels=256, z_channels=1, n_layers=6, conv=True, attn=False, fusion='concat', bridge='concat', kl=False, softmax='_0', activation=None):
+    def __init__(self, channels=256, z_channels=1, n_layers=6, conv=True, attn=False, fusion='concat', bridge='concat', kl=False, softmax='_0', activation=None):
         super().__init__()
-        assert patch_size == patch_stride or patch_size == 2 * patch_stride
         self.fusion, self.kl = fusion, kl
-        dilation = patch_size // patch_stride
         activation = nn.ReLU() if activation is None else activation
-        def unfold(tensor: torch.Tensor):
-            len_pad =  patch_size - patch_stride
-            tensor = nn.functional.pad(tensor, (0, len_pad), mode="constant", value=0)
-            tensor = tensor.unfold(dimension=-1, size=patch_size, step=patch_stride)
-            return tensor.permute(0, 2, 1)
-        self.unfold = unfold
-        self.ae = AutoEncoder(patch_size, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax, activation)
-        if dilation == 1:
-            self.fold = nn.Sequential(Lambda(lambda tensor: tensor.permute(0, 2, 1)), nn.Flatten(), nn.ReLU())
-        else:
-            self.fold = nn.Sequential(
-                nn.Conv1d(patch_size, patch_size, kernel_size=3, stride=1, padding=1), 
-                nn.MaxPool1d(2), 
-                nn.Conv1d(patch_size, patch_size, kernel_size=3, stride=1, padding=1), 
-                Lambda(lambda tensor: tensor.permute(0, 2, 1)), 
-                nn.Flatten(), 
-                nn.ReLU())
+        self.ae = AutoEncoder(channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax, activation)
     
     def forward(self, x, context=None, y_hat=None):
         # unfold x and context to shape (N, patch_size, window_size//patch_stride)

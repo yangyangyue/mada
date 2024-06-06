@@ -116,7 +116,7 @@ class DecoderLayer(nn.Module):
     def __init__(self, channels, conv, attn, bridge, softmax, activation):
         super().__init__()
         self.conv, self.attn, self.bridge = conv, attn, bridge
-        self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
+        self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=4, stride=2, padding=1, output_padding=0)
         if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
         if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
         if self.attn: self.self_ = AttnBlock(channels, softmax)

@@ -27,11 +27,10 @@ WINDOW_STRIDE = 256
 
 
 class NilmNet(L.LightningModule):
-    def __init__(self, net_name, config, save_path = None) -> None:
+    def __init__(self, net_name, sec, save_path = None) -> None:
         super().__init__()
         self.save_path = save_path
         if net_name == 'aada':
-            sec = config['aada']
             self.model = AadaNet(
                 sec.getint('patch_size'),
                 sec.getint('patch_stride'),

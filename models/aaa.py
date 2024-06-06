@@ -81,7 +81,7 @@ class VaeNet(nn.Module):
         self.layer14_1 = nn.Conv1d(2 * channels, 1, kernel_size=3, stride=1, padding=1)
 
 
-    def forward(self, _, aggs, apps=None):
+    def forward(self, aggs, _, apps=None):
         # encoder
         x10 = self.layer1_0(aggs[:, None, :])
         x11 = self.layer1_1(x10)
