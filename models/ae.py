@@ -1,15 +1,13 @@
 import torch
 from torch import nn
 
-ONCE_CROSS = True
-
 def softmax_1(tensor, dim=-1):
     exp_tensor = torch.exp(tensor-tensor.max(dim=dim, keepdim=True)[0])
     norm_factor = 1 + exp_tensor.sum(dim=-1, keepdim=True)
     return exp_tensor / norm_factor
 
 class ResnetBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, activation):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -17,10 +15,10 @@ class ResnetBlock(nn.Module):
         self.stream = nn.Sequential(
             nn.Conv1d(in_channels, mid_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(mid_channels),
-            activation,
+            nn.ReLU(),
             nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(mid_channels),
-            activation,
+            nn.ReLU(),
             nn.Conv1d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(out_channels)
         )
@@ -63,39 +61,36 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, cross, softmax, activation):
+    def __init__(self, channels, conv, attn, fusion, softmax, activation):
         super().__init__()
-        self.conv, self.attn, self.cross = conv, attn, cross
+        self.conv, self.attn, self.cross = conv, attn, fusion=='cross'
         if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
-        if self.conv and self.cross: self.res2 = ResnetBlock(channels, channels, activation)
         if self.attn: self.self_1 = AttnBlock(channels,softmax)
-        if self.attn and self.cross: self.self_2 = AttnBlock(channels, softmax)
-        if self.cross: self.cross_attn = AttnBlock(channels, softmax)
+        if self.cross: 
+            self.res2 = ResnetBlock(channels, channels, activation)
+            self.cross_attn = AttnBlock(channels, softmax)
 
     
     def forward(self, x, context=None):
         x = nn.functional.max_pool1d(x, 2)
-        if self.cross: context = nn.functional.max_pool1d(context, 2)
         if self.conv: x = self.res1(x)
-        if self.conv and self.cross: context = self.res2(context)
         if self.attn: x = self.self_1(x)
-        if self.attn and self.cross: context = self.self_2(context)
-        if self.cross: x = self.cross_attn(x, context)
+        if self.cross: 
+            context = nn.functional.max_pool1d(context, 2)
+            context = self.res2(context)
+            x = self.cross_attn(x, context)
 
         return (x, context) if self.cross else x
 
 class Encoder(nn.Module):
-    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, fusion, softmax, activation):
+    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, fusion, softmax):
         super().__init__()
         self.fusion = fusion
         # conv in
-        self.conv_in1 = ResnetBlock(i_channels * 2 if self.fusion=='concat' else i_channels, channels, activation)
-        if self.fusion=='cross': self.conv_in2 = nn.Conv1d(i_channels, channels, kernel_size=3, stride=1, padding=1)
-        if self.fusion=='cross' and ONCE_CROSS: self.once_cross = AttnBlock(channels, softmax)
+        self.conv_in1 = ResnetBlock(i_channels * 2 if self.fusion=='concat' else i_channels, channels)
+        if self.fusion=='cross': self.conv_in2 = ResnetBlock(i_channels, channels)
         # downsampling
-
-        # downsampling
-        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, self.fusion=='cross' and (not ONCE_CROSS), softmax, activation) for _ in range(n_layers)])
+        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, self.fusion, softmax) for _ in range(n_layers)])
         # conv out
         self.conv_out = nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1)
 
@@ -104,22 +99,20 @@ class Encoder(nn.Module):
         x = self.conv_in1(x)
         hs = [x]
         if self.fusion=='cross': context = self.conv_in2(context)
-        if self.fusion=='cross' and ONCE_CROSS: x = self.once_cross(x, context)
         for layer in self.down:
-            if self.fusion=='cross' and (not ONCE_CROSS): x, context = layer(x, context)
+            if self.fusion=='cross': x, context = layer(x, context)
             else: x = layer(x)
             hs.append(x)
         z = self.conv_out(x)
         return z, hs
 
 class DecoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, bridge, softmax, activation):
+    def __init__(self, channels, bridge, softmax):
         super().__init__()
-        self.conv, self.attn, self.bridge = conv, attn, bridge
+        self.bridge = bridge
         self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=4, stride=2, padding=1, output_padding=0)
         if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
-        if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
-        if self.attn: self.self_ = AttnBlock(channels, softmax)
+        self.res1 = ResnetBlock(channels, channels)
        
     
     def forward(self, x, context=None):
@@ -128,16 +121,16 @@ class DecoderLayer(nn.Module):
         elif self.bridge == 'concat': x = self.up(torch.cat([x, context], dim=1))
         else: x = self.up(x)
         if self.conv: x = self.res1(x)
-        if self.attn: x = self.self_(x)
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, out_channels, channels, z_channels, n_layers, conv, attn, bridge, softmax, activation):
+    def __init__(self, out_channels, channels, z_channels, n_layers, bridge, softmax):
         super().__init__()
         self.bridge=bridge
-        self.conv_in = ResnetBlock(z_channels, channels, activation)
+        # conv in
+        self.conv_in = ResnetBlock(z_channels, channels)
         # upsampling
-        self.up = nn.ModuleList([DecoderLayer(channels, conv, attn, bridge, softmax, activation) for _ in range(n_layers)])
+        self.up = nn.ModuleList([DecoderLayer(channels, bridge, softmax) for _ in range(n_layers)])
         # conv out
         self.conv_out = nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1)
 
@@ -151,11 +144,11 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax, activation):
+    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, fusion, softmax, activation)
-        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, conv, attn, bridge, softmax, activation)
+        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, fusion, softmax)
+        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, bridge, softmax)
     
     def forward(self, x, context=None):
         # encoder
