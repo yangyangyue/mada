@@ -159,6 +159,6 @@ class AutoEncoder(nn.Module):
             eps = torch.randn_like(std)
             z = eps * std + z
         # decoder
-        if self.bridge: y = self.decoder(z, hs[::-1])
-        else: y = self.decoder(z)
+        if self.bridge: y = self.decoder(z[:, None, :], hs[::-1])
+        else: y = self.decoder(z[:, None, :])
         return (y, z, logvar) if self.kl else y
