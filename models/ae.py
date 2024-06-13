@@ -81,7 +81,7 @@ class EncoderLayer(nn.Module):
         return (x, context) if self.cross else x
 
 class Encoder(nn.Module):
-    def __init__(self, i_channels, channels, z_channels, n_layers, conv, attn, fusion, softmax):
+    def __init__(self, i_channels, channels, n_layers, conv, attn, fusion, softmax):
         super().__init__()
         self.fusion = fusion
         # conv in
@@ -118,11 +118,11 @@ class DecoderLayer(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, out_channels, channels, z_channels, n_layers, bridge, softmax):
+    def __init__(self, out_channels, channels, n_layers, bridge, softmax):
         super().__init__()
         self.bridge=bridge
         # conv in
-        self.conv_in = ResnetBlock(z_channels, channels)
+        self.conv_in = ResnetBlock(1, channels)
         # upsampling
         self.up = nn.ModuleList([DecoderLayer(channels, bridge, softmax) for _ in range(n_layers)])
         # conv out
@@ -138,11 +138,11 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax):
+    def __init__(self, io_channels, channels, n_layers, conv, attn, fusion, bridge, kl, softmax):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, fusion, softmax)
-        self.decoder = Decoder(io_channels, channels, z_channels, n_layers, bridge, softmax)
+        self.encoder = Encoder(io_channels, channels, n_layers, conv, attn, fusion, softmax)
+        self.decoder = Decoder(io_channels, channels, n_layers, bridge, softmax)
         length = 1024 // (1 << n_layers)
         self.z_mu = nn.Linear(channels * length, length)
         if self.kl: self.z_log_var = nn.Linear(channels * length, length)
@@ -151,9 +151,10 @@ class AutoEncoder(nn.Module):
         # encoder
         hs = self.encoder(x, context)
         # do variation inference if kl==True
-        z = self.z_mu(hs[-1])
+        mid = hs[-1].flatten(start_dim=1)
+        z = self.z_mu(mid)
         if self.kl:
-            logvar = self.z_log_var(hs[-1])
+            logvar = self.z_log_var(mid)
             std = torch.exp(0.5 * logvar)
             eps = torch.randn_like(std)
             z = eps * std + z

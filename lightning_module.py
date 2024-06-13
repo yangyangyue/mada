@@ -32,7 +32,6 @@ class NilmNet(L.LightningModule):
         if net_name == 'aada':
             self.model = AadaNet(
                 sec.getint('channels'),
-                sec.getint('z_channels'),
                 sec.getint('n_layers'),
                 sec.getboolean('conv'),
                 sec.getboolean('attn'),
