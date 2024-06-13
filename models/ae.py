@@ -16,9 +16,9 @@ class ResnetBlock(nn.Module):
             nn.Conv1d(in_channels, mid_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(mid_channels),
             nn.ReLU(),
-            # nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
-            # nn.BatchNorm1d(mid_channels),
-            # nn.ReLU(),
+            nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm1d(mid_channels),
+            nn.ReLU(),
             nn.Conv1d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(out_channels)
         )
