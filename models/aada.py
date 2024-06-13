@@ -17,10 +17,8 @@ class AadaNet(nn.Module):
         self.ae = AutoEncoder(1, channels, z_channels, n_layers, conv, attn, fusion, bridge, kl, softmax)
     
     def forward(self, x, context=None, y_hat=None):
-        # feed x to autoencoder, don't change the shape
         if self.kl: x, mu, logvar = self.ae(x[:, None, :], context[:, None, :])
         else: x = self.ae(x[:, None, :], context[:, None, :])
-        # fold x and make output using a linear layer
         y = x.relu().squeeze(1)
         if self.training:
             loss = ((y-y_hat) ** 2).mean()

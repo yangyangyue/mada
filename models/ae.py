@@ -16,9 +16,9 @@ class ResnetBlock(nn.Module):
             nn.Conv1d(in_channels, mid_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(mid_channels),
             nn.ReLU(),
-            nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm1d(mid_channels),
-            nn.ReLU(),
+            # nn.Conv1d(mid_channels, mid_channels, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm1d(mid_channels),
+            # nn.ReLU(),
             nn.Conv1d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(out_channels)
         )
@@ -61,13 +61,13 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, fusion, softmax, activation):
+    def __init__(self, channels, conv, attn, fusion, softmax):
         super().__init__()
         self.conv, self.attn, self.cross = conv, attn, fusion=='cross'
-        if self.conv: self.res1 = ResnetBlock(channels, channels, activation)
+        if self.conv: self.res1 = ResnetBlock(channels, channels)
         if self.attn: self.self_1 = AttnBlock(channels,softmax)
         if self.cross: 
-            self.res2 = ResnetBlock(channels, channels, activation)
+            self.res2 = ResnetBlock(channels, channels)
             self.cross_attn = AttnBlock(channels, softmax)
 
     
@@ -92,7 +92,7 @@ class Encoder(nn.Module):
         # downsampling
         self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, self.fusion, softmax) for _ in range(n_layers)])
         # conv out
-        self.conv_out = nn.Conv1d(channels, z_channels, kernel_size=3, stride=1, padding=1)
+        self.conv_out = ResnetBlock(channels, z_channels) 
 
     def forward(self, x, context=None):
         if self.fusion == 'concat': x = torch.concat((x, context), dim=1)
@@ -120,7 +120,7 @@ class DecoderLayer(nn.Module):
         if self.bridge == 'cross': x = self.up(self.combine(x, context))
         elif self.bridge == 'concat': x = self.up(torch.cat([x, context], dim=1))
         else: x = self.up(x)
-        if self.conv: x = self.res1(x)
+        x = self.res1(x)
         return x
     
 class Decoder(nn.Module):
