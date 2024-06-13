@@ -65,11 +65,10 @@ class EncoderLayer(nn.Module):
         super().__init__()
         self.conv, self.attn, self.cross = conv, attn, fusion=='cross'
         if self.conv: self.res1 = ResnetBlock(channels, channels)
-        if self.attn: self.self_1 = AttnBlock(channels,softmax)
+        if self.attn: self.self_1 = AttnBlock(channels, softmax)
         if self.cross: 
             self.res2 = ResnetBlock(channels, channels)
             self.cross_attn = AttnBlock(channels, softmax)
-
     
     def forward(self, x, context=None):
         x = nn.functional.max_pool1d(x, 2)
@@ -79,7 +78,6 @@ class EncoderLayer(nn.Module):
             context = nn.functional.max_pool1d(context, 2)
             context = self.res2(context)
             x = self.cross_attn(x, context)
-
         return (x, context) if self.cross else x
 
 class Encoder(nn.Module):
@@ -113,7 +111,6 @@ class DecoderLayer(nn.Module):
         self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=4, stride=2, padding=1, output_padding=0)
         if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
         self.res1 = ResnetBlock(channels, channels)
-       
     
     def forward(self, x, context=None):
         # combine
