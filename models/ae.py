@@ -11,7 +11,7 @@ class ResnetBlock(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        mid_channels = out_channels // 4
+        mid_channels = max(max(in_channels, out_channels) // 4, 1)
         self.stream = nn.Sequential(
             nn.Conv1d(in_channels, mid_channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm1d(mid_channels),
