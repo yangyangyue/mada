@@ -89,8 +89,6 @@ class Encoder(nn.Module):
         if self.fusion=='cross': self.conv_in2 = ResnetBlock(i_channels, channels)
         # downsampling
         self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, self.fusion, softmax) for _ in range(n_layers)])
-        # conv out
-        self.conv_out = ResnetBlock(channels, z_channels) 
 
     def forward(self, x, context=None):
         if self.fusion == 'concat': x = torch.concat((x, context), dim=1)
@@ -101,8 +99,7 @@ class Encoder(nn.Module):
             if self.fusion=='cross': x, context = layer(x, context)
             else: x = layer(x)
             hs.append(x)
-        z = self.conv_out(x)
-        return z, hs
+        return hs
 
 class DecoderLayer(nn.Module):
     def __init__(self, channels, bridge, softmax):
@@ -146,17 +143,21 @@ class AutoEncoder(nn.Module):
         self.bridge, self.kl = bridge, kl
         self.encoder = Encoder(io_channels, channels, 2*z_channels if self.kl else z_channels, n_layers, conv, attn, fusion, softmax)
         self.decoder = Decoder(io_channels, channels, z_channels, n_layers, bridge, softmax)
+        length = 1024 // (1 << n_layers)
+        self.z_mu = nn.Linear(channels * length, length)
+        if self.kl: self.z_log_var = nn.Linear(channels * length, length)
     
     def forward(self, x, context=None):
         # encoder
-        z, hs = self.encoder(x, context)
+        hs = self.encoder(x, context)
         # do variation inference if kl==True
+        z = self.z_mu(hs[-1])
         if self.kl:
-            mu, logvar = torch.chunk(z, 2, dim=1)
+            logvar = self.z_log_var(hs[-1])
             std = torch.exp(0.5 * logvar)
             eps = torch.randn_like(std)
-            z = eps * std + mu
+            z = eps * std + z
         # decoder
         if self.bridge: y = self.decoder(z, hs[::-1])
         else: y = self.decoder(z)
-        return (y, mu, logvar) if self.kl else y
+        return (y, z, logvar) if self.kl else y
