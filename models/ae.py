@@ -39,7 +39,6 @@ class AttnBlock(nn.Module):
         self.v = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
         self.proj_out = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
 
-
     def forward(self, x, context=None):
         h_ = x
         h_ = self.norm(h_)
@@ -52,8 +51,7 @@ class AttnBlock(nn.Module):
         q = q.permute(0,2,1)   # b,l,c
         w_ = torch.bmm(q,k)     # b,l,l   
         w_ = w_ * (int(c)**(-0.5))
-        if self.softmax == '_1': w_= softmax_1(w_, dim=2)
-        else: w_ = torch.nn.functional.softmax(w_, dim=2)
+        w_ = torch.nn.functional.softmax(w_, dim=2)
         # attend to values
         w_ = w_.permute(0,2,1)   # b,l,l (first l of k, second of q)
         h_ = torch.bmm(v,w_)     # b, c,hw 

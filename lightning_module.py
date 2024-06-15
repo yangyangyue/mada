@@ -28,7 +28,9 @@ class NilmNet(L.LightningModule):
     def __init__(self, net_name, sec, save_path = None) -> None:
         super().__init__()
         self.save_path = save_path
+        self.prenorm = False
         if net_name == 'aada':
+            self.prenorm = sec.getboolean('prenorm')
             self.model = AadaNet(
                 sec.getint('channels'),
                 sec.getint('n_layers'),
@@ -46,14 +48,18 @@ class NilmNet(L.LightningModule):
         self.thresh = []
         self.losses = []
     
-    def forward(self, samples, examples, gt_apps=None):
-        return self.model(samples, examples, gt_apps)
-    
-    
+    def forward(self, samples, examples, ceils=None, gt_apps=None):
+        if not self.prenorm:
+            return self.model(samples, examples, gt_apps)
+        samples =  samples / 6000
+        examples = examples / ceils[:, None]
+        gt_apps = gt_apps / ceils[:, None]
+        return self.model(samples, examples, gt_apps) if self.training else (self.model(samples, examples, gt_apps) * ceils[:, None])
+        
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
         samples, gt_apps, examples, threshs, ceils = batch
-        loss = self(samples, examples, gt_apps)
+        loss = self(samples, examples, ceils, gt_apps)
         self.losses.append(loss.item())
         return loss
     def on_train_epoch_end(self) -> None:
@@ -64,7 +70,7 @@ class NilmNet(L.LightningModule):
         # tags: (N, 3)
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(samples, examples)
+        pred_apps = self(samples, examples, ceils)
         pred_apps[pred_apps < 15] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
@@ -84,7 +90,7 @@ class NilmNet(L.LightningModule):
     
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(samples, examples)
+        pred_apps = self(samples, examples, ceils)
         pred_apps[pred_apps < 15] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
