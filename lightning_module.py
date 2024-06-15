@@ -24,7 +24,6 @@ from compare.vae import VaeNet
 WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
 
-
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, sec, save_path = None) -> None:
         super().__init__()

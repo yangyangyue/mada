@@ -39,7 +39,6 @@ class IbnNet(nn.Module):
             x = self.in_norm(x)
         return torch.relu(x)
 
-
 class VaeNet(nn.Module):
     def __init__(self, channels=256, window_size=1024):
         super().__init__()

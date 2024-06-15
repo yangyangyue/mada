@@ -105,7 +105,7 @@ class DecoderLayer(nn.Module):
     def __init__(self, channels, bridge, softmax):
         super().__init__()
         self.bridge = bridge
-        self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=4, stride=2, padding=1, output_padding=0)
+        self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
         if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
         self.res1 = ResnetBlock(channels, channels)
     
@@ -126,15 +126,16 @@ class Decoder(nn.Module):
         # upsampling
         self.up = nn.ModuleList([DecoderLayer(channels, bridge, softmax) for _ in range(n_layers)])
         # conv out
-        self.conv_out = nn.Conv1d(channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv_out = nn.Conv1d((2 * channels) if self.bridge == 'concat' else channels, out_channels, kernel_size=3, stride=1, padding=1)
 
     def forward(self, z, contexts=None):
         h = self.conv_in(z)
         if self.bridge: 
             for layer, context in zip(self.up, contexts): h = layer(h, context)
+            y = self.conv_out(torch.cat([h, contexts[-1]], dim=1))
         else:
             for layer in self.up: h = layer(h)
-        y = self.conv_out(h)
+            y = self.conv_out(h)
         return y
 
 class AutoEncoder(nn.Module):
