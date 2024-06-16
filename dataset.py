@@ -86,7 +86,7 @@ class NilmDataset(Dataset):
         self.app_thresh = threshs[app_abb]
         self.app_ceil = ceils[app_abb]
         self.raw_samples, self.raw_apps = self.load_data()
-        if len(self.samples) < WINDOW_SIZE:
+        if len(self.raw_samples) < WINDOW_SIZE:
             self.samples, self.apps, self.example = [], [], None
         else:
             self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.raw_samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)

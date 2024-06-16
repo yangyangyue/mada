@@ -59,43 +59,31 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, fusion, softmax):
+    def __init__(self, channels, conv, attn, softmax):
         super().__init__()
-        self.conv, self.attn, self.cross = conv, attn, fusion=='cross'
+        self.conv, self.attn = conv, attn
         if self.conv: self.res1 = ResnetBlock(channels, channels)
         if self.attn: self.self_1 = AttnBlock(channels, softmax)
-        if self.cross: 
-            self.res2 = ResnetBlock(channels, channels)
-            self.cross_attn = AttnBlock(channels, softmax)
     
-    def forward(self, x, context=None):
+    def forward(self, x):
         x = nn.functional.max_pool1d(x, 2)
         if self.conv: x = self.res1(x)
         if self.attn: x = self.self_1(x)
-        if self.cross: 
-            context = nn.functional.max_pool1d(context, 2)
-            context = self.res2(context)
-            x = self.cross_attn(x, context)
-        return (x, context) if self.cross else x
+        return x
 
 class Encoder(nn.Module):
-    def __init__(self, i_channels, channels, n_layers, conv, attn, fusion, softmax):
+    def __init__(self, i_channels, channels, n_layers, conv, attn, softmax):
         super().__init__()
-        self.fusion = fusion
         # conv in
-        self.conv_in1 = ResnetBlock(i_channels * 2 if self.fusion=='concat' else i_channels, channels)
-        if self.fusion=='cross': self.conv_in2 = ResnetBlock(i_channels, channels)
+        self.conv_in1 = ResnetBlock(i_channels , channels)
         # downsampling
-        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, self.fusion, softmax) for _ in range(n_layers)])
+        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, softmax) for _ in range(n_layers)])
 
-    def forward(self, x, context=None):
-        if self.fusion == 'concat': x = torch.concat((x, context), dim=1)
+    def forward(self, x):
         x = self.conv_in1(x)
         hs = [x]
-        if self.fusion=='cross': context = self.conv_in2(context)
         for layer in self.down:
-            if self.fusion=='cross': x, context = layer(x, context)
-            else: x = layer(x)
+            x = layer(x)
             hs.append(x)
         return hs
 
@@ -137,27 +125,29 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels, n_layers, conv, attn, fusion, bridge, kl, softmax):
+    def __init__(self, io_channels, channels, n_layers, conv, attn, bridge, kl, softmax):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels, n_layers, conv, attn, fusion, softmax)
+        self.encoder = Encoder(io_channels, channels, n_layers, conv, attn, softmax)
         self.decoder = Decoder(io_channels, channels, n_layers, bridge, softmax)
+        self.lstm = nn.LSTM(channels, channels, 2, batch_first=True)
         length = 1024 // (1 << n_layers)
-        self.z_mu = nn.Linear(channels * length, length)
-        if self.kl: self.z_log_var = nn.Linear(channels * length, length)
+        self.linear = nn.Linear(channels , length)
+        # if self.kl: self.z_log_var = nn.Linear(channels * length, length)
     
-    def forward(self, x, context=None):
+    def forward(self, x, e):
         # encoder
-        hs = self.encoder(x, context)
-        # do variation inference if kl==True
-        mid = hs[-1].flatten(start_dim=1)
-        z = self.z_mu(mid)
-        if self.kl:
-            logvar = self.z_log_var(mid)
-            std = torch.exp(0.5 * logvar)
-            eps = torch.randn_like(std)
-            z = eps * std + z
+        xs = self.encoder(x)
+        e = self.encoder(e)[-1].flatten(start_dim=1)
+        x = xs[-1].flatten(start_dim=1)
+        z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[:, -1, :]
+        z = self.linear(z)
+        # if self.kl:
+        #     logvar = self.z_log_var(mid)
+        #     std = torch.exp(0.5 * logvar)
+        #     eps = torch.randn_like(std)
+        #     z = eps * std + z
         # decoder
-        if self.bridge: y = self.decoder(z[:, None, :], hs[::-1])
+        if self.bridge: y = self.decoder(z[:, None, :], xs[::-1])
         else: y = self.decoder(z[:, None, :])
-        return (y, z, logvar) if self.kl else y
+        return y

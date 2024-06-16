@@ -1,4 +1,3 @@
-import torch
 from torch import nn
 
 from models.ae import AutoEncoder
@@ -11,10 +10,10 @@ class Lambda(nn.Module):
         return self.func(x)
 
 class AadaNet(nn.Module):
-    def __init__(self, channels=256, n_layers=6, conv=True, attn=True, fusion='concat', bridge='concat', kl=False, softmax='_0'):
+    def __init__(self, channels=256, n_layers=6, conv=True, attn=True, bridge='concat', kl=False, softmax='_0'):
         super().__init__()
-        self.fusion, self.kl = fusion, kl
-        self.ae = AutoEncoder(1, channels, n_layers, conv, attn, fusion, bridge, kl, softmax)
+        self.kl = kl
+        self.ae = AutoEncoder(1, channels, n_layers, conv, attn, bridge, kl, softmax)
         self.sl1 = nn.SmoothL1Loss()
     
     def forward(self, x, context=None, y_hat=None):
