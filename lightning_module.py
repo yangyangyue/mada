@@ -53,14 +53,19 @@ class NilmNet(L.LightningModule):
         self.app_std = config['default'].getfloat('app_std')
     
     def forward(self, samples, examples, ceils=None, gt_apps=None):
-        if not self.prenorm:
+        if self.training:
+            if self.prenorm:
+                samples =  (samples - self.agg_mean) / self.agg_std
+                examples = (examples - self.app_mean) / self.app_std
+                gt_apps = (gt_apps - self.app_mean) / self.app_std 
             return self.model(samples, examples, gt_apps)
-        samples =  (samples - self.agg_mean) / self.agg_std
-        examples = (examples - self.app_mean) / self.app_std
-        if self.training: 
-            gt_apps = (gt_apps - self.app_mean) / self.app_std 
-            return self.model(samples, examples, gt_apps)
-        return (self.model(samples, examples) * self.app_std) + self.app_mean
+        else:
+            if self.prenorm:
+                samples =  (samples - self.agg_mean) / self.agg_std
+                examples = (examples - self.app_mean) / self.app_std
+                return ((self.model(samples, examples) * self.app_std) + self.app_mean).relu()
+            return self.model(samples, examples).relu()
+        
         
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
@@ -171,14 +176,13 @@ class NilmDataModule(L.LightningDataModule):
             for app_dataset in app_datasets:
                 raw_samples.append(app_dataset.raw_samples)
                 raw_apps.append(app_dataset.raw_apps)
+            datasets.append(ConcatDataset(app_datasets))
         self.config.set('default', 'agg_mean', str(np.mean(np.concatenate(raw_samples))))
         self.config.set('default', 'agg_std', str(np.std(np.concatenate(raw_samples))))
         self.config.set('default', 'app_mean', str(np.mean(np.concatenate(raw_apps))))
         self.config.set('default', 'app_std', str(np.std(np.concatenate(raw_apps))))
         with open('config.ini', 'w') as configfile:
             self.config.write(configfile)
-                
-        datasets.append(ConcatDataset(app_datasets))
         # balance the number of samples of diiferent appliances
         min_length = min(len(dataset) for dataset in datasets)
         max_length = int(min_length * 1.5)

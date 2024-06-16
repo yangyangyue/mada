@@ -138,9 +138,11 @@ class AutoEncoder(nn.Module):
     def forward(self, x, e):
         # encoder
         xs = self.encoder(x)
-        e = self.encoder(e)[-1].flatten(start_dim=1)
-        x = xs[-1].flatten(start_dim=1)
-        z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[:, -1, :]
+        # e = self.encoder(e)[-1].flatten(start_dim=1)
+        # x = xs[-1].flatten(start_dim=1)
+        e = self.encoder(e)[-1]
+        x = xs[-1]
+        z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[0][:, -1, :]
         z = self.linear(z)
         # if self.kl:
         #     logvar = self.z_log_var(mid)
