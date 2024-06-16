@@ -71,7 +71,7 @@ class NilmNet(L.LightningModule):
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(samples, examples, ceils)
-        pred_apps[pred_apps < 15] = 0
+        pred_apps[pred_apps < threshs[:, None]] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
         self.thresh.extend([thresh for thresh in threshs])
@@ -91,7 +91,7 @@ class NilmNet(L.LightningModule):
     def test_step(self, batch, _):
         samples, gt_apps, examples, threshs, ceils = batch
         pred_apps = self(samples, examples, ceils)
-        pred_apps[pred_apps < 15] = 0
+        pred_apps[pred_apps < threshs[:, None]] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])

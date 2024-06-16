@@ -69,7 +69,7 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df['stamp'] = pd.to_datetime(df['stamp'], unit='s')
     df = df.set_index('stamp')
     df = df.resample('6s').mean().ffill(limit=30).dropna()
-    df[df < 15] = 0
+    df[df < (threshs[app_abb] if app_abb else 15)] = 0
     df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
     return df
 
