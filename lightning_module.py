@@ -25,11 +25,12 @@ WINDOW_SIZE = 1024
 WINDOW_STRIDE = 256   
 
 class NilmNet(L.LightningModule):
-    def __init__(self, net_name, sec, save_path = None) -> None:
+    def __init__(self, net_name, config, save_path = None) -> None:
         super().__init__()
         self.save_path = save_path
         self.prenorm = False
         if net_name == 'aada':
+            sec = config['aada']
             self.prenorm = sec.getboolean('prenorm')
             self.model = AadaNet(
                 sec.getint('channels'),
@@ -47,14 +48,20 @@ class NilmNet(L.LightningModule):
         self.y_hat = []
         self.thresh = []
         self.losses = []
+        self.agg_mean = config['default'].getfloat('agg_mean')
+        self.agg_std = config['default'].getfloat('agg_std')
+        self.app_mean = config['default'].getfloat('app_mean')
+        self.app_std = config['default'].getfloat('app_std')
     
     def forward(self, samples, examples, ceils=None, gt_apps=None):
         if not self.prenorm:
             return self.model(samples, examples, gt_apps)
-        samples =  samples / 6000
-        examples = examples / ceils[:, None]
-        gt_apps = gt_apps / ceils[:, None]
-        return self.model(samples, examples, gt_apps) if self.training else (self.model(samples, examples, gt_apps) * ceils[:, None])
+        samples =  (samples - self.agg_mean) / self.agg_std
+        examples = (examples - self.app_mean) / self.app_std
+        if self.training: 
+            gt_apps = (gt_apps - self.app_mean) / self.app_std 
+            return self.model(samples, examples, gt_apps)
+        return (self.model(samples, examples) * self.app_std) + self.app_mean
         
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
@@ -138,12 +145,13 @@ def reconstruct(y):
     return out
 
 class NilmDataModule(L.LightningDataModule):
-    def __init__(self, houses, app_abbs, data_dir, batch_size=64):
+    def __init__(self, houses, app_abbs, config):
         super().__init__()
         self.houses = houses
         self.app_abbs = app_abbs
-        self.data_dir = data_dir
-        self.batch_size = batch_size
+        self.config = config
+        self.data_dir = config.get('default', 'data_dir')
+        self.batch_size = config.getint('default', 'batch_size')
 
     def setup(self, stage):
         if stage != 'fit':
@@ -153,13 +161,25 @@ class NilmDataModule(L.LightningDataModule):
             self.test_set = NilmDataset(Path(self.data_dir), set_name, int(house_ids), self.app_abbs, stage)
             return
         datasets = []
+        raw_samples = []
+        raw_apps = []
         for app_abb in self.app_abbs:
             app_datasets =[]
             for houses_in_set in self.houses.split('-'):
                 match = re.match(r'^(\D+)(\d+)$', houses_in_set)
                 set_name, house_ids = match.groups()
                 app_datasets.extend([NilmDataset(Path(self.data_dir), set_name, int(house_id), app_abb, stage) for house_id in house_ids])
-            datasets.append(ConcatDataset(app_datasets))
+            for app_dataset in app_datasets:
+                raw_samples.append(app_dataset.raw_samples)
+                raw_apps.append(app_dataset.raw_apps)
+        self.config.set('default', 'agg_mean', str(np.mean(np.concatenate(raw_samples))))
+        self.config.set('default', 'agg_std', str(np.std(np.concatenate(raw_samples))))
+        self.config.set('default', 'app_mean', str(np.mean(np.concatenate(raw_apps))))
+        self.config.set('default', 'app_std', str(np.std(np.concatenate(raw_apps))))
+        with open('config.ini', 'w') as configfile:
+            self.config.write(configfile)
+                
+        datasets.append(ConcatDataset(app_datasets))
         # balance the number of samples of diiferent appliances
         min_length = min(len(dataset) for dataset in datasets)
         max_length = int(min_length * 1.5)

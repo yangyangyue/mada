@@ -85,23 +85,23 @@ class NilmDataset(Dataset):
         self.app_abb = app_abb
         self.app_thresh = threshs[app_abb]
         self.app_ceil = ceils[app_abb]
-        self.samples, self.apps = self.load_data()
+        self.raw_samples, self.raw_apps = self.load_data()
         if len(self.samples) < WINDOW_SIZE:
             self.samples, self.apps, self.example = [], [], None
         else:
-            self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+            self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.raw_samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+            self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.raw_apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
             self.example = np.load(Path('examples') / f'{set_name}{house_id}-{app_abb}.npy')[0]
             self.example = np.clip(self.example, 0, self.app_ceil)
         if stage != 'fit':
             return 
         # for ukdale house_1, only select 15% of data
-        if self.set_name == 'ukdale' and self.house_id == 1:
-            num = len(self.samples)
-            ind = np.random.permutation(num)
-            select_ids = ind[: int(0.15 * num)]
-            self.samples = self.samples[select_ids]
-            self.apps = self.apps[select_ids]
+        # if self.set_name == 'ukdale' and self.house_id == 1:
+        #     num = len(self.samples)
+        #     ind = np.random.permutation(num)
+        #     select_ids = ind[: int(0.15 * num)]
+        #     self.samples = self.samples[select_ids]
+        #     self.apps = self.apps[select_ids]
 
         # balance the number of samples
         # pos_idx = np.nonzero(np.any(self.apps >= self.app_thresh, axis=1))[0]

@@ -21,8 +21,8 @@ def train(args, config):
     torch.set_float32_matmul_precision('high')
     method, houses, app_abbs =args.method, args.houses, args.apps
     # model and data
-    model = NilmNet(args.method, config['aada'])
-    datamodule = NilmDataModule(houses, app_abbs, config.get('default', 'data_dir'), batch_size=config.getint('default', 'batch_size'))
+    datamodule = NilmDataModule(houses, app_abbs, config)
+    model = NilmNet(args.method, config)
     # checkpoint and early stopping
     checkpoint_callback = ModelCheckpoint(
         dirpath='~/checkpoints/',
