@@ -176,12 +176,12 @@ class NilmDataModule(L.LightningDataModule):
                 raw_samples.append(app_dataset.raw_samples)
                 raw_apps.append(app_dataset.raw_apps)
             datasets.append(ConcatDataset(app_datasets))
-        self.config.set('default', 'agg_mean', str(np.mean(np.concatenate(raw_samples))))
-        self.config.set('default', 'agg_std', str(np.std(np.concatenate(raw_samples))))
-        self.config.set('default', 'app_mean', str(np.mean(np.concatenate(raw_apps))))
-        self.config.set('default', 'app_std', str(np.std(np.concatenate(raw_apps))))
-        with open('config.ini', 'w') as configfile:
-            self.config.write(configfile)
+        # self.config.set('default', 'agg_mean', str(np.mean(np.concatenate(raw_samples))))
+        # self.config.set('default', 'agg_std', str(np.std(np.concatenate(raw_samples))))
+        # self.config.set('default', 'app_mean', str(np.mean(np.concatenate(raw_apps))))
+        # self.config.set('default', 'app_std', str(np.std(np.concatenate(raw_apps))))
+        # with open('config.ini', 'w') as configfile:
+        #     self.config.write(configfile)
         # balance the number of samples of diiferent appliances
         min_length = min(len(dataset) for dataset in datasets)
         max_length = int(min_length * 1.5)
