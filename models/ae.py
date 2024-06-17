@@ -1,11 +1,6 @@
 import torch
 from torch import nn
 
-def softmax_1(tensor, dim=-1):
-    exp_tensor = torch.exp(tensor-tensor.max(dim=dim, keepdim=True)[0])
-    norm_factor = 1 + exp_tensor.sum(dim=-1, keepdim=True)
-    return exp_tensor / norm_factor
-
 class ResnetBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -29,10 +24,9 @@ class ResnetBlock(nn.Module):
         return h
     
 class AttnBlock(nn.Module):
-    def __init__(self, channels, softmax):
+    def __init__(self, channels,):
         super().__init__()
         self.in_channels = channels
-        self.softmax = softmax
         self.norm = nn.BatchNorm1d(channels)
         self.q = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
         self.k = nn.Conv1d(channels, channels, kernel_size=1, stride=1, padding=0)
@@ -59,11 +53,11 @@ class AttnBlock(nn.Module):
         return x + h_
     
 class EncoderLayer(nn.Module):
-    def __init__(self, channels, conv, attn, softmax):
+    def __init__(self, channels, conv, attn):
         super().__init__()
         self.conv, self.attn = conv, attn
         if self.conv: self.res1 = ResnetBlock(channels, channels)
-        if self.attn: self.self_1 = AttnBlock(channels, softmax)
+        if self.attn: self.self_1 = AttnBlock(channels)
     
     def forward(self, x):
         x = nn.functional.max_pool1d(x, 2)
@@ -72,12 +66,12 @@ class EncoderLayer(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, i_channels, channels, n_layers, conv, attn, softmax):
+    def __init__(self, i_channels, channels, n_layers, conv, attn):
         super().__init__()
         # conv in
         self.conv_in1 = ResnetBlock(i_channels , channels)
         # downsampling
-        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn, softmax) for _ in range(n_layers)])
+        self.down = nn.ModuleList([EncoderLayer(channels, conv, attn) for _ in range(n_layers)])
 
     def forward(self, x):
         x = self.conv_in1(x)
@@ -88,11 +82,11 @@ class Encoder(nn.Module):
         return hs
 
 class DecoderLayer(nn.Module):
-    def __init__(self, channels, bridge, softmax):
+    def __init__(self, channels, bridge):
         super().__init__()
         self.bridge = bridge
         self.up = nn.ConvTranspose1d((2 * channels) if self.bridge == 'concat' else channels, channels, kernel_size=3, stride=2, padding=1, output_padding=1)
-        if self.bridge == 'cross': self.combine = AttnBlock(channels, softmax)
+        if self.bridge == 'cross': self.combine = AttnBlock(channels)
         self.res1 = ResnetBlock(channels, channels)
     
     def forward(self, x, context=None):
@@ -104,13 +98,13 @@ class DecoderLayer(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, out_channels, channels, n_layers, bridge, softmax):
+    def __init__(self, out_channels, channels, n_layers, bridge):
         super().__init__()
         self.bridge=bridge
         # conv in
         self.conv_in = ResnetBlock(1, channels)
         # upsampling
-        self.up = nn.ModuleList([DecoderLayer(channels, bridge, softmax) for _ in range(n_layers)])
+        self.up = nn.ModuleList([DecoderLayer(channels, bridge) for _ in range(n_layers)])
         # conv out
         self.conv_out = nn.Conv1d((2 * channels) if self.bridge == 'concat' else channels, out_channels, kernel_size=3, stride=1, padding=1)
 
@@ -125,14 +119,14 @@ class Decoder(nn.Module):
         return y
 
 class AutoEncoder(nn.Module):
-    def __init__(self, io_channels, channels, n_layers, conv, attn, bridge, kl, softmax):
+    def __init__(self, io_channels, channels, n_layers, conv, attn, bridge, kl):
         super().__init__()
         self.bridge, self.kl = bridge, kl
-        self.encoder = Encoder(io_channels, channels, n_layers, conv, attn, softmax)
-        self.decoder = Decoder(io_channels, channels, n_layers, bridge, softmax)
-        self.lstm = nn.LSTM(channels, channels, 2, batch_first=True)
+        self.encoder = Encoder(io_channels, channels, n_layers, conv, attn)
+        self.decoder = Decoder(io_channels, channels, n_layers, bridge)
+        # self.lstm = nn.LSTM(channels, channels, 2, batch_first=True)
         length = 1024 // (1 << n_layers)
-        self.linear = nn.Linear(channels , length)
+        self.linear = nn.Linear(2 * channels * length, length)
         # if self.kl: self.z_log_var = nn.Linear(channels * length, length)
     
     def forward(self, x, e):
@@ -142,8 +136,8 @@ class AutoEncoder(nn.Module):
         # x = xs[-1].flatten(start_dim=1)
         e = self.encoder(e)[-1]
         x = xs[-1]
-        z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[0][:, -1, :]
-        z = self.linear(z)
+        # z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[0][:, -1, :]
+        z = self.linear(torch.concat([e, x], dim=2).flatten(start_dim=1))
         # if self.kl:
         #     logvar = self.z_log_var(mid)
         #     std = torch.exp(0.5 * logvar)

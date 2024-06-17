@@ -38,8 +38,7 @@ class NilmNet(L.LightningModule):
                 sec.getboolean('conv'),
                 sec.getboolean('attn'),
                 sec.get('bridge'),
-                sec.getboolean('kl'),
-                sec.get('softmax'))
+                sec.getboolean('kl'))
         elif net_name == 'vae':
             self.model = VaeNet()
         self.x = []
