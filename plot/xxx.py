@@ -16,7 +16,10 @@ agg = np.stack(lines).sum(axis=0) + 10
 lines = [agg] + lines
 
 labels = ['mains', 'kettle', 'microwave', 'dishwasher', 'washing-machine', 'fridge']
-
+# default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+# new_colors = default_colors[1:]  
+# plt.rcParams['axes.prop_cycle'] = plt.cycler(color=new_colors)
+# labels = ['kettle', 'microwave', 'dishwasher', 'washing-machine', 'fridge']
 
 # 创建3D图形
 fig = plt.figure(figsize=(12, 12))
@@ -49,7 +52,7 @@ ax.view_init(elev=18., azim=54)
 
 ax.set_proj_type('ortho')
 
-plt.savefig('my_figure.png', bbox_inches='tight', pad_inches=0.5, dpi=300)
+plt.savefig('kmdwf.png', bbox_inches='tight', pad_inches=0.5, dpi=300)
 
 # 显示图形
 # plt.show()

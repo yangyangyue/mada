@@ -8,25 +8,21 @@ email: lily231147@gmail.com
 
 import hashlib
 from pathlib import Path
+import random
+import re
 import tempfile
 
 import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
 
-""" Tips
-1. 如果一个房屋，针对一个appliance，有多个instance，那么需要将他们合并在一起，还是单独分开？
-核心问题是同设备不同实例的波形相似而又不完全相同
-1）将他们分开会有一个问题，比如当前在训练instance1，那么总线上出现instance2的波形，这时候就会有问题。即总线上有这个设备，但支线上没有。虽然不是一个设备，但实例的波形很相似的，会导致不稳定问题。
-2）将他们合并在一起，但是在我的迁移方案下，只记录一个instance的示例，从逻辑上来说就不应该推出别的instance的波形
-解决方案：每个实例采集一个示例，然后合并在一起。
-"""
-
+DIR = Path('/hy-tmp/nilm_lf')
 WINDOW_SIZE = 1024
-WINDOW_STRIDE = 256
+WINDOW_STRIDE = 512
 
 threshs ={"k": 2000, "m": 200, "d": 20, "w": 1200, "f": 50}
 ceils = {"k": 3100, "m": 3000, "d": 2500, "w": 2500, "f": 300}
+
 ukdale_channels = {
     'k': {1: [10], 2: [8], 5: [18]},
     'm': {1: [13], 2: [15], 5: [23]},
@@ -34,6 +30,24 @@ ukdale_channels = {
     'w': {1: [5], 2: [12], 5: [24]},
     'f': {1: [12], 2: [14], 5: [19]}
 }
+
+refit_channels = {
+    'k':{2: [8], 5: [8], 6: [7]},
+    'm':{2: [5], 5: [7], 6: [6]},
+    'd':{2: [3], 5: [4], 6: [3]},
+    'w':{2: [2], 5: [3], 6: [2]},
+    'f':{2: [1], 5: [1], 6: [1]}
+}
+
+exs = [{}, {}, {}, {}, {}]
+for path in Path('examples').glob('*.npy'):
+    if   '-k' in path.stem: exs[0][path.stem] = np.clip(np.load(path)[0], 0, ceils['k'])
+    elif '-m' in path.stem: exs[1][path.stem] = np.clip(np.load(path)[0], 0, ceils['m'])
+    elif '-d' in path.stem: exs[2][path.stem] = np.clip(np.load(path)[0], 0, ceils['d'])
+    elif '-w' in path.stem: exs[3][path.stem] = np.clip(np.load(path)[0], 0, ceils['w'])
+    elif '-f' in path.stem: exs[4][path.stem] = np.clip(np.load(path)[0], 0, ceils['f'])
+    else: pass
+
 # refit_channels = {
 #     'k':{2: [8], 3: [9], 4: [9], 5: [8], 6: [7], 7: [9], 8: [9], 9: [7], 11: [7], 12: [6], 13: [9], 17: [8], 19: [5], 20: [9], 21: [7]},
 #     'm':{2: [5], 3: [8], 4: [8], 5: [7], 6: [6], 8: [8], 9: [6], 10: [8], 11: [6], 12: [5], 13:[7, 8], 15: [7], 17: [7], 18: [9], 19: [4], 20: [8]},
@@ -44,23 +58,38 @@ ukdale_channels = {
 #          15: [1], 16: [1, 2], 17: [1, 2], 18: [1, 2, 3], 19: [1], 20: [1, 2], 21: [1]}   
 # }
 
-refit_channels = {
-    'k':{2: [8], 5: [8], 6: [7]},
-    'm':{2: [5], 5: [7], 6: [6]},
-    'd':{2: [3], 5: [4], 6: [3]},
-    'w':{2: [2], 5: [3], 6: [2]},
-    'f':{2: [1], 5: [1], 6: [1]}
-}
+class ApplianceDataset(Dataset):
+    def __init__(self, app_abb, mains, apps, ex, stage) -> None:
+        super().__init__()
+        self.app_abb= app_abb
+        self.mains = mains
+        self.apps = apps
+        self.ex = ex
+        self.thresh = threshs[app_abb]
+        self.ceil = ceils[app_abb]
+        if stage == 'fit':
+            # balance the number of samples
+            pos_idx = np.nonzero(np.any(self.apps >= self.thresh, axis=1))[0]
+            neg_idx = np.nonzero(np.any(self.apps < self.thresh, axis=1))[0]
+            if 1 * len(pos_idx) < len(neg_idx):
+                neg_idx = np.random.choice(neg_idx, 1 * len(pos_idx), replace=False)
+                self.samples = np.concatenate([self.samples[pos_idx], self.samples[neg_idx]])
+                self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
 
-def read(data_dir, set_name, house_id, app_abb=None, channel=None):
+    def __len__(self):
+        return len(self.mains)
+    
+    def __getitem__(self, index):
+        return self.mains[index], self.apps[index], self.ex, self.thresh, self.ceil
+    
+def read(set_name, house_id, app_abb=None, channel=None):
     """ read a dataframe of a specific appliance or mains """
     if set_name == 'ukdale':
-        if not app_abb:
-            channel = 1
-        path = data_dir / set_name / f'house_{house_id}' / f'channel_{channel}.dat'
+        if not app_abb: channel = 1
+        path = DIR / set_name / f'house_{house_id}' / f'channel_{channel}.dat'
         df = pd.read_csv(path, sep=" ", header=None).iloc[:, :2]
     elif set_name == 'refit':
-        path = data_dir / set_name / f'CLEAN_House{house_id}.csv'
+        path = DIR / set_name / f'CLEAN_House{house_id}.csv'
         df = pd.read_csv(path)
         column = 'Aggregate' if not app_abb else f'Appliance{channel}'
         df = df[['Unix', column]]
@@ -73,61 +102,76 @@ def read(data_dir, set_name, house_id, app_abb=None, channel=None):
     df = df.clip(lower=0, upper=6000 if not app_abb else ceils[app_abb])
     return df
 
+def load_data(set_name, house_id):
+    """
+    加载指定房屋的总线曲线 & 5类电器支线曲线，并返回所有曲线时间戳有交集的部分
 
-class NilmDataset(Dataset):
-    """ designed for one appliance in one house """
-    def __init__(self, dir, set_name, house_id, app_abb, stage) -> None:
-        super().__init__()
-        print(f'{set_name}-{house_id}-{app_abb} is loading...')
-        self.dir = dir
-        self.set_name = set_name
-        self.house_id = house_id
-        self.app_abb = app_abb
-        self.app_thresh = threshs[app_abb]
-        self.app_ceil = ceils[app_abb]
-        self.raw_samples, self.raw_apps = self.load_data()
-        if len(self.raw_samples) < WINDOW_SIZE:
-            self.samples, self.apps, self.example = [], [], None
-        else:
-            self.samples = np.copy(np.lib.stride_tricks.sliding_window_view(self.raw_samples, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.apps = np.copy(np.lib.stride_tricks.sliding_window_view(self.raw_apps, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
-            self.example = np.load(Path('examples') / f'{set_name}{house_id}-{app_abb}.npy')[0]
-            self.example = np.clip(self.example, 0, self.app_ceil)
-        if stage != 'fit':
-            return 
-        # for ukdale house_1, only select 15% of data
-        # if self.set_name == 'ukdale' and self.house_id == 1:
-        #     num = len(self.samples)
-        #     ind = np.random.permutation(num)
-        #     select_ids = ind[: int(0.15 * num)]
-        #     self.samples = self.samples[select_ids]
-        #     self.apps = self.apps[select_ids]
+    Args:
+        set_name (str): 数据集名称，可选'ukdale'或'refit'
+        house_id (int): 房屋ID
 
-        # balance the number of samples
-        pos_idx = np.nonzero(np.any(self.apps >= self.app_thresh, axis=1))[0]
-        neg_idx = np.nonzero(np.any(self.apps < self.app_thresh, axis=1))[0]
-        if 1 * len(pos_idx) < len(neg_idx):
-            neg_idx = np.random.choice(neg_idx, 1 * len(pos_idx), replace=False)
-            self.samples = np.concatenate([self.samples[pos_idx], self.samples[neg_idx]])
-            self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
+    Returns:
+        np.ndarray: 加载的功率数据
+    """
+    temp_dir = Path(tempfile.gettempdir())
+    temp_path = temp_dir / hashlib.sha256(f'{set_name}{house_id}'.encode()).hexdigest()
+    if temp_path.exists():
+        powers = np.load(temp_path)
+    else:
+        powers = read(set_name, house_id)
+        for app_abb in 'kmdwf':
+            channels = ukdale_channels[app_abb][house_id] if set_name == 'ukdale' else refit_channels[app_abb][house_id]
+            apps = read(set_name, house_id, app_abb, channels[0])
+            powers = pd.merge(powers, apps, on='stamp')
+        powers = powers.to_numpy(dtype=np.float32)
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(temp_path, powers)
+    return powers
 
-    def __len__(self):
-        return len(self.samples)
+def get_house_sets(set_name, house_id, stage):
+    powers= load_data(set_name, house_id)
+    if stage == 'fit' and set_name == 'ukdale' and house_id == 1: powers = powers[0: int(0.15 * len(powers))]
+    assert len(powers) >= WINDOW_SIZE
+    mains, ks, ms, ds, ws, fs = powers[:, 0], powers[:, 1], powers[:, 2], powers[:, 3], powers[:, 4], powers[:, 5]
+    mains = np.copy(np.lib.stride_tricks.sliding_window_view(mains, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    ks = np.copy(np.lib.stride_tricks.sliding_window_view(ks, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    ms = np.copy(np.lib.stride_tricks.sliding_window_view(ms, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    ds = np.copy(np.lib.stride_tricks.sliding_window_view(ds, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    ws = np.copy(np.lib.stride_tricks.sliding_window_view(ws, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    fs = np.copy(np.lib.stride_tricks.sliding_window_view(fs, WINDOW_SIZE)[::WINDOW_STRIDE]).astype(np.float32)
+    if stage == "fit":
+        k_set = ApplianceDataset('k', mains, ks, random.choice(list(exs[0].values())), stage)
+        m_set = ApplianceDataset('m', mains, ms, random.choice(list(exs[1].values())), stage)
+        d_set = ApplianceDataset('d', mains, ds, random.choice(list(exs[2].values())), stage)
+        w_set = ApplianceDataset('w', mains, ws, random.choice(list(exs[3].values())), stage)
+        f_set = ApplianceDataset('f', mains, fs, random.choice(list(exs[4].values())), stage)
+    else:
+        k_set = ApplianceDataset('k', mains, ks, exs[0][f"{set_name}{house_id}"], stage)
+        m_set = ApplianceDataset('m', mains, ms, exs[1][f"{set_name}{house_id}"], stage)
+        d_set = ApplianceDataset('d', mains, ds, exs[2][f"{set_name}{house_id}"], stage)
+        w_set = ApplianceDataset('w', mains, ws, exs[3][f"{set_name}{house_id}"], stage)
+        f_set = ApplianceDataset('f', mains, fs, exs[4][f"{set_name}{house_id}"], stage)
+    return k_set, m_set, d_set, w_set, f_set
 
-    def __getitem__(self, idx):
-        """ the shape of each part is  (window_size, ) """
-        return self.samples[idx], self.apps[idx], self.example, self.app_thresh, self.app_ceil
+
+def get_houses_sets(set_houses, stage):
+    """
+    根据给定的房屋集合名称和阶段，获取多个房屋集合的数据集
+
+    Args:
+        set_houses (str): 房屋集合名称，如'ukdale15'
+        stage (str): 阶段名称，用于区分训练（'fit'）和其他阶段
+
+    Returns:
+        List[ConcatDataset]: 包含5类电器的数据集的列表，每类电器的数据集是来自指定房屋的ConcatDataset
+
+    """
+    datasets = [[], [], [], [], []]
+    match = re.match(r'^(\D+)(\d+)$', set_houses)
+    set_name, house_ids = match.groups()
+    for house_id in house_ids:
+        for idx, app_set in enumerate(get_house_sets(set_name, int(house_id), stage)):
+            datasets[idx].append(app_set)
+    datasets = map(lambda x: ConcatDataset(x), datasets)
+    return datasets
     
-    def load_data(self):
-        temp_dir = Path(tempfile.gettempdir())
-        temp_path = temp_dir / hashlib.sha256(f'{self.set_name}{self.house_id}-{self.app_abb}'.encode()).hexdigest()
-        if temp_path.exists():
-            powers = np.load(temp_path)
-        else:
-            aggs = read(self.dir, self.set_name, self.house_id)
-            channels = ukdale_channels[self.app_abb][self.house_id] if self.set_name == 'ukdale' else refit_channels[self.app_abb][self.house_id]
-            apps = read(self.dir, self.set_name, self.house_id, self.app_abb, channels[0])
-            powers = pd.merge(aggs, apps, on='stamp').to_numpy(dtype=np.float32)
-            temp_path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(temp_path, powers)
-        return powers[:, 0], powers[:, 1]

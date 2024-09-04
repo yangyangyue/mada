@@ -13,8 +13,8 @@ from pathlib import Path
 import lightning.pytorch as pl
 import torch
 
+from dataset import get_houses_sets
 from lightning_module import NilmDataModule, NilmNet
-
 
 def test(method, houses, app_abb, ckpt, config):
     pl.seed_everything(42, workers=True)
@@ -27,17 +27,30 @@ def test(method, houses, app_abb, ckpt, config):
     trainer = pl.Trainer(devices="auto", accelerator="auto")
     trainer.test(model, datamodule=datamodule, verbose=False)
 
+def test(args, config):
+    # init
+    pl.seed_everything(42, workers=True)
+    torch.set_float32_matmul_precision('high')
+    method, houses =args.method, args.houses
+    # model and data
+    datasets = get_houses_sets(houses, 'test')
+    for app_abb, app_set in zip('kmdwf', datasets):
+        save_path = Path('results') / f'{method}-{houses}-{app_abb}.csv'
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        ckpt_files = list(Path('~/checkpoints').expanduser().glob(f'{args.ckpt}*'))
+        datamodule = NilmDataModule(test_set=app_set, bs=config.getint('default', 'batch_size'))
+        model = NilmNet.load_from_checkpoint(ckpt_files[0], net_name=method, config=config, save_path=save_path)
+        trainer = pl.Trainer(devices="auto", accelerator="auto")
+        trainer.test(model, datamodule=datamodule, verbose=False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--method', type=str, default='aada')
     parser.add_argument('--ckpt', type=str, required=True)
     parser.add_argument('--houses', type=str, default='ukdale15')
-    parser.add_argument('--apps', type=str, default='k')
     args = parser.parse_args()
-
     config = configparser.ConfigParser()
     config.read(f'config.ini')
-    for app_abb in args.apps:
-        test(args.method, args.houses, app_abb,  args.ckpt, config)
+    test(args, config)
         

@@ -124,20 +124,15 @@ class AutoEncoder(nn.Module):
         self.bridge, self.kl = bridge, kl
         self.encoder = Encoder(io_channels, channels, n_layers, conv, attn)
         self.decoder = Decoder(io_channels, channels, n_layers, bridge)
-        # self.lstm = nn.LSTM(channels, channels, 2, batch_first=True)
         length = 1024 // (1 << n_layers)
-        self.linear = nn.Linear(2 * channels * length, length)
+        self.linear = nn.Linear(channels * length, length)
         # if self.kl: self.z_log_var = nn.Linear(channels * length, length)
     
     def forward(self, x, e):
         # encoder
-        xs = self.encoder(x)
-        # e = self.encoder(e)[-1].flatten(start_dim=1)
-        # x = xs[-1].flatten(start_dim=1)
-        e = self.encoder(e)[-1]
+        xs = self.encoder(x, e)
         x = xs[-1]
-        # z = self.lstm(torch.concat([e, x], dim=2).permute(0, 2, 1))[0][:, -1, :]
-        z = self.linear(torch.concat([e, x], dim=2).flatten(start_dim=1))
+        z = self.linear(x.flatten(start_dim=1))
         # if self.kl:
         #     logvar = self.z_log_var(mid)
         #     std = torch.exp(0.5 * logvar)

@@ -6,23 +6,16 @@ written by lily
 email: lily231147@gmail.com
 """
 
-from pathlib import Path
-import random
-import re
 import sys
 
 import lightning as L
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.data import ConcatDataset, DataLoader, random_split, Subset
+from torch.utils.data import DataLoader
 
-from dataset import NilmDataset
 from models.aada import AadaNet
 from compare.vae import VaeNet
-
-WINDOW_SIZE = 1024
-WINDOW_STRIDE = 256   
 
 class NilmNet(L.LightningModule):
     def __init__(self, net_name, config, save_path = None) -> None:
@@ -51,7 +44,7 @@ class NilmNet(L.LightningModule):
         self.app_mean = config['default'].getfloat('app_mean')
         self.app_std = config['default'].getfloat('app_std')
     
-    def forward(self, samples, examples, ceils=None, gt_apps=None):
+    def forward(self, samples, examples, gt_apps=None):
         if self.training:
             if self.prenorm:
                 samples =  (samples - self.agg_mean) / self.agg_std
@@ -65,11 +58,10 @@ class NilmNet(L.LightningModule):
                 return ((self.model(samples, examples) * self.app_std) + self.app_mean).relu()
             return self.model(samples, examples).relu()
         
-        
     def training_step(self, batch, _):
         # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
-        samples, gt_apps, examples, threshs, ceils = batch
-        loss = self(samples, examples, ceils, gt_apps)
+        samples, gt_apps, examples, _, _ = batch
+        loss = self(samples, examples, gt_apps)
         self.losses.append(loss.item())
         return loss
     def on_train_epoch_end(self) -> None:
@@ -79,8 +71,8 @@ class NilmNet(L.LightningModule):
     def validation_step(self, batch, _):
         # tags: (N, 3)
         # examples | samples | gt_apps: (N, WINDOE_SIZE)
-        samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(samples, examples, ceils)
+        samples, gt_apps, examples, threshs, _ = batch
+        pred_apps = self(samples, examples)
         pred_apps[pred_apps < threshs[:, None]] = 0
         self.y.extend([tensor for tensor in pred_apps])
         self.y_hat.extend([tensor for tensor in gt_apps])
@@ -89,8 +81,7 @@ class NilmNet(L.LightningModule):
     def on_validation_epoch_end(self):
         mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
         mae_on = torch.concat([y[y_hat>thresh] - y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).abs().mean() 
-        mre_on = torch.concat([(y[y_hat>thresh] - y_hat[y_hat>thresh]).abs() / y_hat[y_hat>thresh]
-                                for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).mean() 
+        mre_on = torch.concat([(y[y_hat>thresh] - y_hat[y_hat>thresh]).abs() / y_hat[y_hat>thresh] for y, y_hat, thresh in zip(self.y, self.y_hat, self.thresh)]).mean() 
         self.log('val_mae', mae, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_mae_on', mae_on, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_mre_on', mre_on, on_epoch=True, prog_bar=True, logger=True)
@@ -99,8 +90,8 @@ class NilmNet(L.LightningModule):
         self.thresh.clear()
     
     def test_step(self, batch, _):
-        samples, gt_apps, examples, threshs, ceils = batch
-        pred_apps = self(samples, examples, ceils)
+        samples, gt_apps, examples, threshs, _ = batch
+        pred_apps = self(samples, examples)
         pred_apps[pred_apps < threshs[:, None]] = 0
         self.x.extend([tensor for tensor in samples])
         self.y.extend([tensor for tensor in pred_apps])
@@ -108,13 +99,10 @@ class NilmNet(L.LightningModule):
         self.thresh.extend([thresh for thresh in threshs])
 
     def on_test_epoch_end(self):
-        device = self.thresh[0].device
-        x = reconstruct(self.x).to(device)
-        y = reconstruct(self.y).to(device)
-        y_hat = reconstruct(self.y_hat).to(device)
+        x, y, y_hat = torch.concat(self.x), torch.concat(self.y), torch.concat(self.y_hat)
         np.savetxt(self.save_path, torch.stack([x, y_hat, y]).cpu().numpy())
-        mae = (y-y_hat).abs().mean()
         on_status = y_hat > self.thresh[0]
+        mae = (y-y_hat).abs().mean()
         mae_on = (y[on_status]-y_hat[on_status]).abs().mean() 
         mre_on = ((y[on_status]-y_hat[on_status]).abs() / y_hat[on_status]).mean() 
         self.x.clear()
@@ -134,68 +122,13 @@ class NilmNet(L.LightningModule):
             print(self.save_path.stem, *args)
             sys.stdout = sys.__stdout__  
 
-
-def reconstruct(y):
-    n = len(y)
-    length = WINDOW_SIZE + (n - 1) * WINDOW_STRIDE 
-    depth = WINDOW_SIZE // WINDOW_STRIDE
-    out = torch.full([length, depth], float('nan'))
-    for i, cur in enumerate(y):
-        start = i * WINDOW_STRIDE
-        d = i % depth
-        out[start: start+WINDOW_SIZE, d] = cur
-    out = torch.nanmedian(out, dim=-1).values
-    return out
-
 class NilmDataModule(L.LightningDataModule):
-    def __init__(self, houses, app_abbs, config):
+    def __init__(self, train_set=None, val_set=None, test_set=None, bs=256):
         super().__init__()
-        self.houses = houses
-        self.app_abbs = app_abbs
-        self.config = config
-        self.data_dir = config.get('default', 'data_dir')
-        self.batch_size = config.getint('default', 'batch_size')
-
-    def setup(self, stage):
-        if stage != 'fit':
-            # just load dataset of one appliance in one house
-            match = re.match(r'^(\D+)(\d+)$', self.houses)
-            set_name, house_ids = match.groups()
-            self.test_set = NilmDataset(Path(self.data_dir), set_name, int(house_ids), self.app_abbs, stage)
-            return
-        datasets = []
-        raw_samples = []
-        raw_apps = []
-        for app_abb in self.app_abbs:
-            app_datasets =[]
-            for houses_in_set in self.houses.split('-'):
-                match = re.match(r'^(\D+)(\d+)$', houses_in_set)
-                set_name, house_ids = match.groups()
-                app_datasets.extend([NilmDataset(Path(self.data_dir), set_name, int(house_id), app_abb, stage) for house_id in house_ids])
-            for app_dataset in app_datasets:
-                raw_samples.append(app_dataset.raw_samples)
-                raw_apps.append(app_dataset.raw_apps)
-            datasets.append(ConcatDataset(app_datasets))
-        # self.config.set('default', 'agg_mean', str(np.mean(np.concatenate(raw_samples))))
-        # self.config.set('default', 'agg_std', str(np.std(np.concatenate(raw_samples))))
-        # self.config.set('default', 'app_mean', str(np.mean(np.concatenate(raw_apps))))
-        # self.config.set('default', 'app_std', str(np.std(np.concatenate(raw_apps))))
-        # with open('config.ini', 'w') as configfile:
-        #     self.config.write(configfile)
-        # balance the number of samples of diiferent appliances
-        min_length = min(len(dataset) for dataset in datasets)
-        max_length = int(min_length * 1.5)
-        balanced_datasets = []
-        for dataset in datasets:
-            if len(dataset) > max_length:
-                indices = random.sample(range(len(dataset)), max_length)
-                balanced_dataset = Subset(dataset, indices)
-            else:
-                balanced_dataset = dataset
-            balanced_datasets.append(balanced_dataset)
-        dataset = ConcatDataset(balanced_datasets)
-        self.train_set, self.val_set = random_split(dataset, [0.8, 0.2])
-            
+        self.train_set = train_set
+        self.val_set = val_set
+        self.test_set = test_set
+        self.batch_size = bs
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=18)
