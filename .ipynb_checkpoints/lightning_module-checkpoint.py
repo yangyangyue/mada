@@ -7,6 +7,8 @@ email: lily231147@gmail.com
 """
 
 import sys
+sys.path.append('..')
+from dataset import vars
 
 import lightning as L
 import numpy as np
@@ -16,15 +18,20 @@ from torch.utils.data import DataLoader
 
 from models.aada import AadaNet
 from compare.vae import VaeNet
+from compare.s2p import S2pNet
 
 class NilmNet(L.LightningModule):
-    def __init__(self, method, save_path = None) -> None:
+    def __init__(self, method, turning = False, save_path = None) -> None:
         super().__init__()
+        self.method = method
+        self.turning = turning
         self.save_path = save_path
         if method == 'aada':
             self.model = AadaNet()
         elif method == 'vae':
             self.model = VaeNet()
+        elif method == 's2p':
+            self.model = S2pNet()
         self.x = []
         self.y = []
         self.y_hat = []
@@ -65,9 +72,14 @@ class NilmNet(L.LightningModule):
         ids, samples, gt_apps, examples, weights, threshs, _ = batch
         pred_apps = self(ids, samples, examples)
         pred_apps[pred_apps < threshs[:, None]] = 0
-        self.y.extend([tensor for tensor in pred_apps])
-        self.y_hat.extend([tensor for tensor in gt_apps])
-        self.thresh.extend([thresh for thresh in threshs])
+        if self.method == 's2p':
+            self.y.extend([tensor for tensor in pred_apps])
+            self.y_hat.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in gt_apps])
+            self.thresh.extend([thresh for thresh in threshs])
+        else:
+            self.y.extend([tensor for tensor in pred_apps])
+            self.y_hat.extend([tensor for tensor in gt_apps])
+            self.thresh.extend([thresh for thresh in threshs])
     
     def on_validation_epoch_end(self):
         mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
@@ -84,10 +96,16 @@ class NilmNet(L.LightningModule):
         ids, samples, gt_apps, examples, weights, threshs, _ = batch
         pred_apps = self(ids, samples, examples)
         pred_apps[pred_apps < threshs[:, None]] = 0
-        self.x.extend([tensor for tensor in samples])
-        self.y.extend([tensor for tensor in pred_apps])
-        self.y_hat.extend([tensor for tensor in gt_apps])
-        self.thresh.extend([thresh for thresh in threshs])
+        if self.method == 's2p':
+            self.x.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in samples])
+            self.y.extend([tensor for tensor in pred_apps])
+            self.y_hat.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in gt_apps])
+            self.thresh.extend([thresh for thresh in threshs])
+        else:
+            self.x.extend([tensor for tensor in samples])
+            self.y.extend([tensor for tensor in pred_apps])
+            self.y_hat.extend([tensor for tensor in gt_apps])
+            self.thresh.extend([thresh for thresh in threshs])
 
     def on_test_epoch_end(self):
         x, y, y_hat = torch.concat(self.x), torch.concat(self.y), torch.concat(self.y_hat)
@@ -103,7 +121,7 @@ class NilmNet(L.LightningModule):
         self.print2file('test_mae', mae.item(), 'test_mae_on', mae_on.item(), 'test_mre_on', mre_on.item())
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters())
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4 if self.turning else 1e-3)
         scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
         return [optimizer], [scheduler]
 

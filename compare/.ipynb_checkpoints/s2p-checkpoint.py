@@ -1,7 +1,9 @@
+import sys
+sys.path.append('..')
+from dataset import vars
+
 import torch  
 import torch.nn as nn  
-
-WINDOW_SIZE = 1024
   
 class S2pNet(nn.Module):  
     def __init__(self, input_window_length):  
@@ -13,10 +15,10 @@ class S2pNet(nn.Module):
         self.conv4 = nn.Conv1d(40, 50, kernel_size=5, stride=1, padding=2)  
         self.conv5 = nn.Conv1d(50, 50, kernel_size=5, stride=1, padding=2)  
         self.flatten = nn.Flatten()  
-        self.fc1 = nn.Linear(50 * WINDOW_SIZE, 1024)  # 这里的+4是考虑padding后的输出尺寸，可能需要根据实际情况调整  
+        self.fc1 = nn.Linear(50 * vars.WINDOW_SIZE, 1024)  # 这里的+4是考虑padding后的输出尺寸，可能需要根据实际情况调整  
         self.fc2 = nn.Linear(1024, 1)  
   
-    def forward(self, x):  
+    def forward(self, ids, x, context=None, y_hat=None, weights=None):  
         x = self.conv1(x[:, None, :]).relu()
         x = self.conv2(x).relu()
         x = self.conv3(x).relu()
@@ -24,5 +26,8 @@ class S2pNet(nn.Module):
         x = self.conv5(x).relu()
         x = self.flatten(x)  
         x = self.fc1(x).relu()
-        x = self.fc2(x)  
-        return x  
+        x = self.fc2(x)
+        if self.training:
+            return (x-y_hat[len(y_hat)//2]) ** 2
+        return
+            return x

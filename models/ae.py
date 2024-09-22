@@ -1,7 +1,8 @@
+import sys
+sys.path.append('..')
+from dataset import vars
 import torch
 from torch import nn
-
-WINDOW_SIZE = 1024
 
 class ResnetBlock(nn.Module):
     """
@@ -124,7 +125,7 @@ class AutoEncoder(nn.Module):
         self.kl = kl
         self.encoder = Encoder(io_channels, channels, n_layers, n_heads)
         self.decoder = Decoder(io_channels, channels, n_layers)
-        length = WINDOW_SIZE >> n_layers
+        length = vars.WINDOW_SIZE >> n_layers
         append = 5
         self.z_mu = nn.Linear(channels * length + append, length)
         if self.kl: self.z_var = nn.Linear(channels * length + append, length)

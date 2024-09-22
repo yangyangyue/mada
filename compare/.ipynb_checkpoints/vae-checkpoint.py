@@ -6,9 +6,11 @@ written by lily
 email: lily231147@gmail.com
 """
 
+import sys
+sys.path.append('..')
+from dataset import vars
 import torch
 from torch import nn
-
 
 class IbnNet(nn.Module):
     def __init__(self, in_channels, out_channels, use_ins=False):
@@ -40,7 +42,7 @@ class IbnNet(nn.Module):
         return torch.relu(x)
 
 class VaeNet(nn.Module):
-    def __init__(self, channels=256, window_size=1024):
+    def __init__(self, channels=256):
         super().__init__()
 
         # encoder
@@ -59,7 +61,7 @@ class VaeNet(nn.Module):
         self.layer7_0 = IbnNet(channels, channels)
 
         # mid
-        length = window_size // (1 << 6)
+        length = vars.WINDOW_SIZE // (1 << 6)
         self.z_mu = nn.Linear(channels * length, length)
         self.z_log_var = nn.Linear(channels * length, length)
 
