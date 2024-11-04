@@ -16,9 +16,12 @@ import tempfile
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.manifold import TSNE
+from scipy.interpolate import interp1d
 from torch.utils.data import Dataset, ConcatDataset
 
+random.seed(42)
+
+# 全局变量
 DIR = Path('/root/autodl-tmp/nilm_lf')
 ids = {"k": 0, "m": 1, "d": 2, "w": 3, "f": 4}
 threshs = {"k": 2000, "m": 200, "d": 20, "w": 1200, "f": 50}
@@ -30,7 +33,7 @@ weights = weights / np.min(weights)
 # onehot
 tags = np.identity(5).astype(np.float32)
 # 示例
-exs = {path.stem: np.clip(np.load(path)[0], 0, ceils[path.stem[-1]]) for path in Path('examples').glob('*.npy')}
+exs = {path.stem: np.clip(np.load(path), 0, ceils[path.stem[-1]]) for path in Path('examples').glob('*.npy')}
 # 微调数据量
 n_turning = 1000
 # 多模块共享变量
@@ -60,25 +63,16 @@ class ApplianceDataset(Dataset):
         self.app_abb= app_abb
         self.mains = mains
         self.apps = apps
-        self.weight = 1 if noweight else weight[ids[app_abb]]
-        # 从效果上看，正负样本平衡反而会带来负收益
-        # if stage == 'fit':
-        #     # balance the number of samples
-        #     pos_idx = np.nonzero(np.any(self.apps >= self.thresh, axis=1))[0]
-        #     neg_idx = np.nonzero(np.any(self.apps < self.thresh, axis=1))[0]
-        #     if 1 * len(pos_idx) < len(neg_idx):
-        #         neg_idx = np.random.choice(neg_idx, 1 * len(pos_idx), replace=False)
-        #         self.mains = np.concatenate([self.mains[pos_idx], self.mains[neg_idx]])
-        #         self.apps = np.concatenate([self.apps[pos_idx], self.apps[neg_idx]])
+        self.weight = 1 if noweight else weights[ids[app_abb]]
 
     def __len__(self):
         return len(self.mains)
     
     def __getitem__(self, index):
-        return ids[self.app_abb], self.mains[index], self.apps[index], tags[[ids[self.app_abb]]], self.weight, threshs[self.app_abb], ceils[self.app_abb]
+        return ids[self.app_abb], self.mains[index], self.apps[index], tags[ids[self.app_abb]], self.weight, threshs[self.app_abb], ceils[self.app_abb]
     
 def read(set_name, house_id, app_abb=None, channel=None):
-    """ read a dataframe of a specific appliance or mains """
+    """ 读取指定数据集指定房屋内指定电器或总线的功率曲线 """
     if set_name == 'ukdale':
         if not app_abb: channel = 1
         path = DIR / set_name / f'house_{house_id}' / f'channel_{channel}.dat'
@@ -118,7 +112,7 @@ def get_house_sets(set_name, house_id, noweight, stage):
     """ 获取单个房屋中各电器的数据集 """
     powers= load_data(set_name, house_id)
     if stage == 'fit' and set_name == 'ukdale' and house_id == 1: powers = powers[0: int(0.15 * len(powers))]
-    powers = [np.copy(np.lib.stride_tricks.sliding_window_view(power, vars.WINDOW_SIZE)[::vars.WINDOW_STRIDE]).astype(np.float32) for power in powers.T]
+    powers = [np.copy(np.lib.stride_tricks.sliding_window_view(power, vars.WINDOW_SIZE)[::max(vars.WINDOW_STRIDE, 32 if stage == 'fit' else -1)]).astype(np.float32) for power in powers.T]
     return [ApplianceDataset(app_abb, powers[0], powers[idx+1], noweight, stage) for idx, app_abb in enumerate("kmdwf")]
 
 def get_houses_sets(set_houses, noweight, stage):
@@ -132,33 +126,69 @@ def get_houses_sets(set_houses, noweight, stage):
     datasets = list(map(lambda x: ConcatDataset(x), datasets))
     return datasets
 
+def gen_clean_mains(aggs, apps, app_abb, extra=0):
+    """ 获取不包含目标电器曲线的干净总线 """
+    if app_abb == 'f':
+        mains = []
+        for agg, app in zip(aggs, apps):
+            agg_clean = agg - app + (extra * (app > threshs[app_abb])).astype(np.float32)
+            status = app > threshs['f']
+            event_ids = np.nonzero(np.diff(status))[0]
+            for id in event_ids:
+                  agg_clean[id-2:id+2] = np.nan
+            is_nan = np.isnan(agg_clean)
+            not_nan = ~is_nan
+            agg_not_nan = agg_clean[not_nan]
+            ids_not_nan = np.arange(len(agg_clean))[not_nan]
+            f = interp1d(ids_not_nan, agg_not_nan, kind='linear', fill_value='extrapolate')
+            agg_clean[is_nan] = f(np.arange(len(agg_clean))[is_nan])
+            mains.append(agg_clean)
+        import matplotlib.pyplot as plt
+        for i in range(10):
+            plt.figure()
+            plt.plot(mains[i], label='aaa')
+            plt.plot(apps[i], label='bbb')
+            plt.legend()
+            plt.savefig(f'case/{i}.png', bbox_inches='tight',  dpi=300)
+            plt.close()
+    else: 
+        mains = [agg for agg, app in zip(aggs, apps) if np.max(app) < threshs[app_abb]]
+    return mains
+
 def get_syn_house_sets(set_name, house_id, noweight):
     """" 生成一个房屋的合成数据 """
     def shift(power):
-        # 9成概率offset在[-256, 256], 1成概率offset在[-512, -256]和[256, 512]
-        offset = np.randint(-vars.WINDOW_SIZE//4, vars.WINDOW_SIZE//4) if np.random.random() < 0.8 else np.randint(-vars.WINDOW_SIZE//2, vars.WINDOW_SIZE//2)
-        return np.concatenate([np.zeros(offset, dtype=np.float32), power[:-offset]] if offset > 0 else [power[-offset:], np.zeros(-offset, dtype=np.float32)])
+        # 8成概率offset在[-256, 256], 2成概率offset在[-512, -256]和[256, 512]
+        if np.random.random() < 0.6: offset = np.random.randint(-256,256)
+        else: offset = np.random.randint(-512, 512)
+        power_shift = np.concatenate([np.zeros(offset, dtype=np.float32), power[:-offset]] if offset > 0 else [power[-offset:], np.zeros(-offset, dtype=np.float32)])
+        return power_shift[-vars.WINDOW_SIZE:] if offset > 0 else power_shift[:vars.WINDOW_SIZE]
         
-    powers= load_data(set_name, house_id)
-    powers = [np.copy(np.lib.stride_tricks.sliding_window_view(power, vars.WINDOW_SIZE)[::vars.WINDOW_STRIDE]).astype(np.float32) for power in powers.T]
+    raw_powers= load_data(set_name, house_id)
+    powers = [np.copy(np.lib.stride_tricks.sliding_window_view(power, vars.WINDOW_SIZE)[::max(vars.WINDOW_STRIDE, 32)]).astype(np.float32) for power in raw_powers.T]
     for idx, app_abb in enumerate("kmdwf"):
-        # 只选取目标房屋没有目标电器的段
-        mains = [agg for agg, app in zip(powers[0], powers[idx+1]) if np.max(app) < threshs[idx]]
-        print(f"{set_name}-{house_id}-{app+abb}: {len(mains)}")
+        # 获取干净总线
+        mains = gen_clean_mains(powers[0], powers[idx+1], app_abb, 60 if house_id == 5 else 30)
+        print(f"{set_name}-{house_id}-{app_abb}: {len(mains)}")
         # 随机选取指定数量的总线窗口
         random_ids = np.random.permutation(len(mains))
-        mains = [mains[random_ids[i%random_ids]] for i in range(n_turning)]
+        mains = [mains[random_ids[i%len(random_ids)]] for i in range(n_turning)]
         # 随机生成指定数量的支线窗口
-        app_exs = exs[f'{set_name}{house_id}-{app_abb}']
-        random_ids = np.random.permutation(len(app_exs))
-        apps = [shift(app_exs[random_ids[i%random_ids]]) if i % 2 == 0 else np.zeros(vars.WINDOW_SIZE, dtype=np.float32) for i in range(n_turning)]
-        mains = [agg + app for agg, app in zip(mains, apps)]
-        yield ApplianceDataset(app_abb, np.array(mains), np.array(apps), noweight, 'turn')
+        app_exs_row = exs[f'{set_name}{house_id}-{app_abb}']
+        app_exs = []
+        for i in range(n_turning):
+            if app_abb =='f': app_exs.append(app_exs_row[random.randint(0, len(app_exs_row)-1)][(b:=random.randint(0, 1024-vars.WINDOW_SIZE)):b+vars.WINDOW_SIZE])
+            elif i % 2 == 0: app_exs.append(shift(app_exs_row[random.randint(0, len(app_exs_row)-1)]))
+            else: app_exs.append(np.zeros(vars.WINDOW_SIZE, dtype=np.float32))
+        mains = [agg + ex for agg, ex in zip(mains, app_exs)]
+        # mains = [agg - ((ex>50) * 30).astype(np.float32) for agg, ex in zip(mains, app_exs)]
+        yield ApplianceDataset(app_abb, np.array(mains), np.array(app_exs), noweight, 'turn')
 
-def get_syn_houses_sets(set_houses, noweight)
+def get_syn_houses_sets(set_houses, noweight):
     """ 获取合成的数据，用于微调 """
     datasets = [[], [], [], [], []]
     match = re.match(r'^(\D+)(\d+)$', set_houses)
+    set_name, house_ids = match.groups()
     # 遍历每个房屋的每个设备
     for house_id in house_ids:
         for idx, app_set in enumerate(get_syn_house_sets(set_name, int(house_id), noweight)):

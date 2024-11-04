@@ -7,7 +7,6 @@ email: lily231147@gmail.com
 """
 
 import sys
-sys.path.append('..')
 from dataset import vars
 
 import lightning as L
@@ -16,9 +15,11 @@ import torch
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader
 
-from models.aada import AadaNet
-from compare.vae import VaeNet
-from compare.s2p import S2pNet
+from models.mada import MadaNet
+from models.mvae import MvaeNet
+from models.vae import VaeNet
+from models.s2p import S2pNet
+from models.s2s import S2sNet
 
 class NilmNet(L.LightningModule):
     def __init__(self, method, turning = False, save_path = None) -> None:
@@ -26,60 +27,44 @@ class NilmNet(L.LightningModule):
         self.method = method
         self.turning = turning
         self.save_path = save_path
-        if method == 'aada':
-            self.model = AadaNet()
+        if method == 'mada':
+            self.model = MadaNet()
         elif method == 'vae':
             self.model = VaeNet()
         elif method == 's2p':
             self.model = S2pNet()
-        self.x = []
-        self.y = []
-        self.y_hat = []
-        self.thresh = []
-        self.losses = []
-        self.agg_mean = 565.54193
-        self.agg_std = 723.1381
-        self.app_mean = 26.222065
-        self.app_std = 202.90942
+        elif method == 's2s':
+            self.model = S2sNet()
+        elif method == 'mvae':
+            self.model = MvaeNet()
+        self.x, self.y, self.y_hat, self.thresh, self.losses = [], [], [], [], []
     
-    def forward(self, ids, samples, examples, gt_apps=None, weights=None):
-        if self.training:
-            # prenorm:
-            # samples =  (samples - self.agg_mean) / self.agg_std
-            # examples = (examples - self.app_mean) / self.app_std
-            # gt_apps = (gt_apps - self.app_mean) / self.app_std 
-            return self.model(ids, samples, examples, gt_apps, weights)
-        else:
-            # prenorm:
-            # samples =  (samples - self.agg_mean) / self.agg_std
-            # examples = (examples - self.app_mean) / self.app_std
-            # return ((self.model(samples, examples) * self.app_std) + self.app_mean).relu()
-            return self.model(ids, samples, examples).relu()
+    def forward(self, ids, aggs, tags, apps=None, weights=None):
+        if self.training: return self.model(ids, aggs, tags, apps, weights)
+        else: return self.model(ids, aggs, tags).relu()
         
     def training_step(self, batch, _):
-        # examples | samples | gt_apps: (N, WINDOE_SIZE), threshs | ceils: (N, )
-        ids, samples, gt_apps, examples, weights,  _, _ = batch
-        loss = self(ids, samples, examples, gt_apps, weights)
+        # aggs, apps: (N, WINDOE_SIZE)
+        # tags: (N, 5)
+        # ids, weights, threshs, ceils: (N, )
+        ids, aggs, apps, tags, weights, threshs, ceils = batch
+        loss = self(ids, aggs, tags, apps, weights)
         self.losses.append(loss.item())
         return loss
+        
     def on_train_epoch_end(self) -> None:
         self.log('loss', np.mean(self.losses), on_epoch=True, prog_bar=True, logger=True)
         self.losses.clear()
     
     def validation_step(self, batch, _):
-        # tags: (N, 3)
-        # examples | samples | gt_apps: (N, WINDOE_SIZE)
-        ids, samples, gt_apps, examples, weights, threshs, _ = batch
-        pred_apps = self(ids, samples, examples)
+        ids, aggs, apps, tags, weights, threshs, ceils = batch
+        pred_apps = self(ids, aggs, tags)
         pred_apps[pred_apps < threshs[:, None]] = 0
-        if self.method == 's2p':
-            self.y.extend([tensor for tensor in pred_apps])
-            self.y_hat.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in gt_apps])
-            self.thresh.extend([thresh for thresh in threshs])
-        else:
-            self.y.extend([tensor for tensor in pred_apps])
-            self.y_hat.extend([tensor for tensor in gt_apps])
-            self.thresh.extend([thresh for thresh in threshs])
+        # 记录数据 s2p只记录中心点
+        mid = vars.WINDOW_SIZE // 2
+        self.y.extend([tensor for tensor in pred_apps])
+        self.y_hat.extend([tensor[mid:mid+1] if self.method == 's2p' else tensor for tensor in apps])
+        self.thresh.extend([thresh for thresh in threshs])
     
     def on_validation_epoch_end(self):
         mae = torch.concat([y-y_hat for y, y_hat in zip(self.y, self.y_hat)]).abs().mean() 
@@ -93,19 +78,15 @@ class NilmNet(L.LightningModule):
         self.thresh.clear()
     
     def test_step(self, batch, _):
-        ids, samples, gt_apps, examples, weights, threshs, _ = batch
-        pred_apps = self(ids, samples, examples)
+        # 每次只测试一个设备
+        ids, aggs, apps, tags, weights, threshs, ceils = batch
+        pred_apps = self(ids, aggs, tags)
         pred_apps[pred_apps < threshs[:, None]] = 0
-        if self.method == 's2p':
-            self.x.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in samples])
-            self.y.extend([tensor for tensor in pred_apps])
-            self.y_hat.extend([tensor[len(y_hat)//2:len(y_hat)//2+1] for tensor in gt_apps])
-            self.thresh.extend([thresh for thresh in threshs])
-        else:
-            self.x.extend([tensor for tensor in samples])
-            self.y.extend([tensor for tensor in pred_apps])
-            self.y_hat.extend([tensor for tensor in gt_apps])
-            self.thresh.extend([thresh for thresh in threshs])
+        mid = vars.WINDOW_SIZE // 2
+        self.x.extend([tensor[mid:mid+1] if self.method == 's2p' else tensor for tensor in aggs])
+        self.y.extend([tensor for tensor in pred_apps])
+        self.y_hat.extend([tensor[mid:mid+1] if self.method == 's2p' else tensor for tensor in apps])
+        self.thresh.extend([thresh for thresh in threshs])
 
     def on_test_epoch_end(self):
         x, y, y_hat = torch.concat(self.x), torch.concat(self.y), torch.concat(self.y_hat)
@@ -121,7 +102,7 @@ class NilmNet(L.LightningModule):
         self.print2file('test_mae', mae.item(), 'test_mae_on', mae_on.item(), 'test_mre_on', mre_on.item())
     
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4 if self.turning else 1e-3)
+        optimizer = torch.optim.AdamW(self.parameters())
         scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
         return [optimizer], [scheduler]
 
@@ -129,7 +110,7 @@ class NilmNet(L.LightningModule):
         with open('test_results.log', 'a') as f:
             sys.stdout = f
             print(self.save_path.stem, *args)
-            sys.stdout = sys.__stdout__  
+            sys.stdout = sys.__stdout__
 
 class NilmDataModule(L.LightningDataModule):
     def __init__(self, train_set=None, val_set=None, test_set=None, bs=256):

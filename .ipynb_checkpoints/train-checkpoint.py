@@ -17,52 +17,56 @@ from torch.utils.data import ConcatDataset, random_split, Subset
 from dataset import *
 from lightning_module import NilmDataModule, NilmNet
 
-def pre_train(app_abb, method, houses, dataset):
-    train_set, val_set = random_split(dataset, [0.8, 0.2])
+def pre_train(method, fit_dataset, save_name):
+    # 预训练
+    train_set, val_set = random_split(fit_dataset, [0.8, 0.2])
     datamodule = NilmDataModule(train_set=train_set, val_set=val_set, bs=256)
     model = NilmNet(method)
-    checkpoint_callback = ModelCheckpoint(dirpath='~/checkpoints/', filename=f'{method}-{houses}-{app_abb}', monitor="val_mae")
+    checkpoint_callback = ModelCheckpoint(dirpath='checkpoints/', filename=save_name, monitor="val_mae")
     early_stop_callback = EarlyStopping(monitor="val_mae", patience=20)
     trainer = pl.Trainer(devices="auto", accelerator="auto", max_epochs=80, callbacks=[checkpoint_callback, early_stop_callback], log_every_n_steps=10)
     trainer.fit(model, datamodule=datamodule)
 
-def fine_turning(app_abb, method, houses, turnhouses, turn_datasets):
-    train_set, val_set = random_split(dataset, [0.8, 0.2])
+def fine_turning(method, turn_dataset, ckpt_name, save_name):
+    # 微调 
+    train_set, val_set = random_split(turn_dataset, [0.9, 0.1])
     datamodule = NilmDataModule(train_set=train_set, val_set=val_set, bs=256)
-    ckpt_files = list(Path('~/checkpoints').expanduser().glob(f'{method}-{houses}-{app_abb}'))
+    ckpt_files = list(Path('checkpoints').expanduser().glob(ckpt_name))
     model = NilmNet.load_from_checkpoint(ckpt_files[-1], turning=True, method=method)
-    checkpoint_callback = ModelCheckpoint(dirpath='~/checkpoints/', filename=f'{method}-{houses}{turnhouses}-{app_abb}', monitor="val_mae")
-    early_stop_callback = EarlyStopping(monitor="val_mae", patience=10)
-    trainer = pl.Trainer(devices="auto", accelerator="auto", max_epochs=40, callbacks=[checkpoint_callback, early_stop_callback], log_every_n_steps=10)
+    checkpoint_callback = ModelCheckpoint(dirpath='checkpoints/', filename=save_name, monitor="val_mae")
+    early_stop_callback = EarlyStopping(monitor="val_mae", patience=20)
+    trainer = pl.Trainer(devices="auto", accelerator="auto", max_epochs=80, callbacks=[checkpoint_callback, early_stop_callback], log_every_n_steps=10)
     trainer.fit(model, datamodule=datamodule)
 
-def train(method, houses, turnhouses, o2o, noweight):
+def train(method, fithouses, turnhouses, pretrain, noweight):
     pl.seed_everything(42, workers=True)
     torch.set_float32_matmul_precision('high')
     # 数据
-    datasets = get_houses_sets(houses, noweight, 'fit')
+    if pretrain:  fit_datasets = get_houses_sets(fithouses, noweight, 'fit')
     if turnhouses: turn_datasets = get_syn_houses_sets(turnhouses, noweight)
-    if not o2o:
-        # 不进行正负样本平衡的话，设备间样本平衡也没有意义了
-        # min_length = min(len(app_set) for app_set in datasets)
-        # datasets = [Subset(app_set, random.sample(range(len(app_set)), min_length)) for app_set in datasets]
-        dataset = ConcatDataset(datasets)
-        pre_train('a', method, houses, dataset)
-        if turnhouses: fine_turning('a', method, houses, turnhouses, turn_datasets)
-    else:
-        for app_abb, dataset in zip("kmdwf", datasets):
+    suffix = 'noweight' if noweight else 'weight'
+    if method != 'mada' and method != 'mvae':
+        # 单设备依次训练/微调每个设备
+        for i, app_abb in enumerate("kmdwf"):
+            if app_abb != 'f': continue
             print(f"train {app_abb} ...", flush=True)
-            do_train(app_abb, method, houses)
-            if turnhouses: fine_turning(app_abb, method, houses, turnhouses, turn_datasets)
+            if pretrain: pre_train(method, fit_datasets[i], f'{method}-{fithouses}-{app_abb}')
+            if turnhouses: fine_turning(method, turn_datasets[i], f'{method}-{fithouses}-{app_abb}*', f'{method}-{fithouses}{turnhouses}-{app_abb}') 
+    else:
+        # 多设备直接训练/微调
+        if pretrain: pre_train(method, ConcatDataset(fit_datasets), f'{method}-{fithouses}-{suffix}')
+        if turnhouses: fine_turning(method, ConcatDataset(turn_datasets), f'{method}-{fithouses}-{suffix}*', f'{method}-{fithouses}{turnhouses}-{suffix}')
 
 if __name__ == "__main__":
     # args
     parser = argparse.ArgumentParser()
-    parser.add_argument('--method', type=str, default='aada')
-    parser.add_argument('--houses', type=str, default='ukdale15')
-    parser.add_argument('--turnhouses', default='') # 指定用于微调的房屋
-    parser.add_argument('--o2o', action='store_true')  # 指定是单模型单设备还是单模型多设备
-    parser.add_argument('--noweight', action='store_true') # 不使用加权损失
+    parser.add_argument('--method', type=str, default='mada') # 方法 mada vae s2p s2s
+    parser.add_argument('--fithouses', type=str, default='ukdale15') # 指定用于训练的房屋 ukdale15 refit256
+    parser.add_argument('--turnhouses', default='ukdale2') # 指定用于微调的房屋 若为空 则不微调 ukdale2 ukdale1 ukdale5
+    parser.add_argument('--noweight', action='store_true') # 不使用加权损失 默认使用
+    parser.add_argument('--nopretrain', action='store_true') # 是否预训练
     args = parser.parse_args()
+    if args.method=='s2p' or args.method=='s2s': vars.WINDOW_SIZE = 599
+    if args.method=='s2p': vars.WINDOW_STRIDE = 1
     # train
-    train(args.method, args.houses,args.turnhouses, args.o2o, args.noweight)
+    train(args.method, args.fithouses,args.turnhouses, not args.nopretrain, args.noweight)
