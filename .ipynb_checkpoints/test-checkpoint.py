@@ -29,7 +29,7 @@ def test(method, test_house, fit_houses, turn_houses, noweight):
         if method != 'mada' and method != 'mvae': suffix = app_abb
         elif noweight: suffix = 'noweight'
         else: suffix = 'weight'
-        save_path = Path('results') / f'{method}-{fit_houses}{turn_houses}-{app_abb}.csv'
+        save_path = Path('results') / f'{'manw' if method == 'mada' and noweight else method}-{fit_houses}{turn_houses}-{app_abb}.csv'
         save_path.parent.mkdir(parents=True, exist_ok=True)
         datamodule = NilmDataModule(test_set=app_set, bs=256)
         ckpt_files = list(Path('checkpoints').expanduser().glob(f"{method}-{fit_houses}{turn_houses}-{suffix}*"))

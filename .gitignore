@@ -3,4 +3,7 @@
 /.idea
 /curves
 /temp.py
-/checkpoints
+/results
+/case
+/lightning_logs
+/plot

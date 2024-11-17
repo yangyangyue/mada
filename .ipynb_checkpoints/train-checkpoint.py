@@ -48,7 +48,6 @@ def train(method, fithouses, turnhouses, pretrain, noweight):
     if method != 'mada' and method != 'mvae':
         # 单设备依次训练/微调每个设备
         for i, app_abb in enumerate("kmdwf"):
-            if app_abb != 'f': continue
             print(f"train {app_abb} ...", flush=True)
             if pretrain: pre_train(method, fit_datasets[i], f'{method}-{fithouses}-{app_abb}')
             if turnhouses: fine_turning(method, turn_datasets[i], f'{method}-{fithouses}-{app_abb}*', f'{method}-{fithouses}{turnhouses}-{app_abb}') 
